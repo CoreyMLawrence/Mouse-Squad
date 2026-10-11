@@ -104,14 +104,17 @@ const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
 cv.width=WNAT; cv.height=HNAT;
 const wrap=document.getElementById('wrap');
+let crtDirty=true, crtRect=null, crtOw=0, crtOh=0;
 function fit(){
   const cs=getComputedStyle(wrap);
   const availW=wrap.clientWidth -(parseFloat(cs.paddingLeft)||0)-(parseFloat(cs.paddingRight)||0);
   const availH=wrap.clientHeight-(parseFloat(cs.paddingTop)||0)-(parseFloat(cs.paddingBottom)||0);
   const s=Math.min(availW/WNAT, availH/HNAT);
   cv.style.width=(WNAT*s)+'px'; cv.style.height=(HNAT*s)+'px';
+  crtDirty=true;
 }
-addEventListener('resize', fit);
+addEventListener('resize', ()=>{ fit(); crtDirty=true; });
+addEventListener('scroll', ()=>{ crtDirty=true; }, {passive:true});
 
 // ---------- palette (measured from the concept frames) ----------
 const COL={
@@ -245,18 +248,22 @@ function drawCRT(){
   if(!crtGL) initCRT();
   if(!crtGL) return;
   const g=crtGL.canvas, gl=crtGL.gl;
-  // overlay exactly on top of the game canvas
-  const r=cv.getBoundingClientRect();
-  const dpr=Math.min(window.devicePixelRatio||1, 2);
-  const ow=Math.max(1,Math.round(r.width*dpr)), oh=Math.max(1,Math.round(r.height*dpr));
-  g.style.left=r.left+'px'; g.style.top=r.top+'px';
-  g.style.width=r.width+'px'; g.style.height=r.height+'px';
-  if(g.width!==ow||g.height!==oh){ g.width=ow; g.height=oh; }
-  gl.viewport(0,0,ow,oh);
+  // overlay exactly on top of the game canvas (cached to eliminate layout thrashing)
+  if(crtDirty || !crtRect){
+    crtRect=cv.getBoundingClientRect();
+    const dpr=Math.min(window.devicePixelRatio||1, 2);
+    crtOw=Math.max(1,Math.round(crtRect.width*dpr));
+    crtOh=Math.max(1,Math.round(crtRect.height*dpr));
+    g.style.left=crtRect.left+'px'; g.style.top=crtRect.top+'px';
+    g.style.width=crtRect.width+'px'; g.style.height=crtRect.height+'px';
+    if(g.width!==crtOw||g.height!==crtOh){ g.width=crtOw; g.height=crtOh; }
+    crtDirty=false;
+  }
+  gl.viewport(0,0,crtOw,crtOh);
   gl.bindTexture(gl.TEXTURE_2D,crtGL.tex);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,cv);
   gl.uniform2f(crtGL.uSrc,WNAT,HNAT);
-  gl.uniform2f(crtGL.uOut,ow,oh);
+  gl.uniform2f(crtGL.uOut,crtOw,crtOh);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
 }
 function applyCRT(on){
@@ -913,7 +920,14 @@ function spawnPlayers(picks, x){            // picks: [{id, src}]
   players=picks.map((p,k)=>({id:p.id, src:p.src, b:newBody(p.id, x+k*96, FEET), lives:3, out:false, jq:false, upPressed:false, prevUp:false}));
   koFx=[];
 }
-function alivePlayers(){ return players.filter(p=>!p.out); }
+const _alivePlayersList=[];
+function alivePlayers(){
+  _alivePlayersList.length=0;
+  for(let i=0; i<players.length; i++){
+    if(!players[i].out) _alivePlayersList.push(players[i]);
+  }
+  return _alivePlayersList;
+}
 function nearestPlayer(x){ let best=null,d=1e9; for(const p of alivePlayers()){ const dd=Math.abs(p.b.x-x); if(dd<d){d=dd;best=p;} } return best; }
 function overlap(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 function bodyBox(b){ const h=HIT_H[b.id]||86; return {x:b.x-17, y:b.y-h, w:34, h}; }
@@ -2478,19 +2492,19 @@ function drawClassroomScenery(){
   rect(0, 362, WNAT, 8, '#8D5733');
   rect(0, 362, WNAT, 2, '#B4784A');
 
-  for(let lx = 140; lx < LEVEL_LEN_1; lx += 260){
+  const startLx = Math.max(140, Math.floor((camX - 60 - 140) / 260) * 260 + 140);
+  const endLx = Math.min(LEVEL_LEN_1, camX + WNAT + 60);
+  for(let lx = startLx; lx < endLx; lx += 260){
     const sx = lx - camX;
-    if(sx > -60 && sx < WNAT + 60){
-      rect(sx - 26, 0, 2, 44, '#607D8B');
-      rect(sx + 26, 0, 2, 44, '#607D8B');
-      rrect(sx - 38, 44, 76, 8, 3); ctx.fillStyle = '#CFD8DC'; ctx.fill();
-      rrect(sx - 34, 50, 68, 5, 2); ctx.fillStyle = '#FFFFFF'; ctx.fill();
-      ctx.fillStyle = 'rgba(255, 255, 230, 0.05)';
-      ctx.beginPath();
-      ctx.moveTo(sx - 34, 55); ctx.lineTo(sx + 34, 55);
-      ctx.lineTo(sx + 90, FEET); ctx.lineTo(sx - 90, FEET);
-      ctx.closePath(); ctx.fill();
-    }
+    rect(sx - 26, 0, 2, 44, '#607D8B');
+    rect(sx + 26, 0, 2, 44, '#607D8B');
+    rrect(sx - 38, 44, 76, 8, 3); ctx.fillStyle = '#CFD8DC'; ctx.fill();
+    rrect(sx - 34, 50, 68, 5, 2); ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 230, 0.05)';
+    ctx.beginPath();
+    ctx.moveTo(sx - 34, 55); ctx.lineTo(sx + 34, 55);
+    ctx.lineTo(sx + 90, FEET); ctx.lineTo(sx - 90, FEET);
+    ctx.closePath(); ctx.fill();
   }
 
   const windows = [1050, 1950];
@@ -2548,15 +2562,15 @@ function drawClassroomScenery(){
 
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const cardPal = ['#E53935', '#1E88E5', '#43A047', '#FB8C00', '#8E24AA'];
-  for(let i = 0; i < letters.length; i++){
+  const iMin = Math.max(0, Math.floor((camX - 30 - 80) / 85));
+  const iMax = Math.min(letters.length - 1, Math.ceil((camX + WNAT + 30 - 80) / 85));
+  for(let i = iMin; i <= iMax; i++){
     const lx = 80 + i * 85;
     const sx = lx - camX;
-    if(sx > -30 && sx < WNAT + 30){
-      const c = cardPal[i % cardPal.length];
-      rrect(sx - 12, 14, 24, 28, 3); ctx.fillStyle = '#FFFFFF'; ctx.fill();
-      rrect(sx - 10, 16, 20, 24, 2); ctx.fillStyle = c; ctx.fill();
-      text(letters[i], sx, 20, 1.6, '#FFFFFF', 'c');
-    }
+    const c = cardPal[i % cardPal.length];
+    rrect(sx - 12, 14, 24, 28, 3); ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    rrect(sx - 10, 16, 20, 24, 2); ctx.fillStyle = c; ctx.fill();
+    text(letters[i], sx, 20, 1.6, '#FFFFFF', 'c');
   }
 
   const clkX = 860 - camX;
@@ -3010,13 +3024,13 @@ function drawHallwayScenery(){
   rect(0,0,WNAT,FEET,COL.hallWall);
   rect(0,270,WNAT,FEET-270,COL.hallWallDk);
   rect(0,268,WNAT,2,'rgba(0,0,0,0.06)');
-  for(let lx=140;lx<LEVEL_LEN_2;lx+=280){
+  const startLx=Math.max(140, Math.floor((camX - 40 - 140) / 280) * 280 + 140);
+  const endLx=Math.min(LEVEL_LEN_2, camX + WNAT + 40);
+  for(let lx=startLx;lx<endLx;lx+=280){
     const sx=lx-camX;
-    if(sx>-40&&sx<WNAT+40){
-      rect(sx-1,0,3,50,COL.hallLampDk);
-      ctx.fillStyle=COL.hallLamp; ctx.beginPath(); ctx.moveTo(sx-16,68); ctx.quadraticCurveTo(sx,48,sx+16,68); ctx.closePath(); ctx.fill();
-      rrect(sx-17,66,34,5,2); ctx.fillStyle=COL.hallLampDk; ctx.fill();
-    }
+    rect(sx-1,0,3,50,COL.hallLampDk);
+    ctx.fillStyle=COL.hallLamp; ctx.beginPath(); ctx.moveTo(sx-16,68); ctx.quadraticCurveTo(sx,48,sx+16,68); ctx.closePath(); ctx.fill();
+    rrect(sx-17,66,34,5,2); ctx.fillStyle=COL.hallLampDk; ctx.fill();
   }
   for(const bb of L1_BOARDS){
     const sx=bb.x-camX;
@@ -3195,16 +3209,19 @@ function drawBarrier(x, y, w = 60, h = 48){
   ctx.moveTo(x + w - 18, y + h); ctx.lineTo(x + w - 14, y + 10); ctx.lineTo(x + w - 10, y + h);
   ctx.stroke();
   rrect(x, y + 8, w, 18, 2); ctx.fillStyle = '#FFFFFF'; ctx.fill();
-  ctx.save();
-  ctx.beginPath(); rrect(x, y + 8, w, 18, 2); ctx.clip();
   ctx.fillStyle = '#FC6903';
   for(let sx = -10; sx < w + 20; sx += 16){
-    ctx.beginPath();
-    ctx.moveTo(x + sx, y + 26); ctx.lineTo(x + sx + 8, y + 26);
-    ctx.lineTo(x + sx + 18, y + 8); ctx.lineTo(x + sx + 10, y + 8);
-    ctx.closePath(); ctx.fill();
+    const x0 = Math.max(x, Math.min(x + w, x + sx));
+    const x1 = Math.max(x, Math.min(x + w, x + sx + 8));
+    const x2 = Math.max(x, Math.min(x + w, x + sx + 18));
+    const x3 = Math.max(x, Math.min(x + w, x + sx + 10));
+    if(x1 > x || x2 > x){
+      ctx.beginPath();
+      ctx.moveTo(x0, y + 26); ctx.lineTo(x1, y + 26);
+      ctx.lineTo(x2, y + 8); ctx.lineTo(x3, y + 8);
+      ctx.closePath(); ctx.fill();
+    }
   }
-  ctx.restore();
 }
 
 function drawSkateboard(x, y, w = 52, h = 22){
@@ -3493,8 +3510,9 @@ function drawScenery(){
 function drawCrate(x,y){
   rect(x,y,CR,CR,COL.crateDk); rect(x+3,y+3,CR-6,CR-6,COL.crate);
   rect(x+3,y+3,CR-6,4,COL.crateHi);
-  ctx.save(); ctx.beginPath(); ctx.rect(x+3,y+3,CR-6,CR-6); ctx.clip();
-  ctx.strokeStyle=COL.crateDk; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(x+3,y+3); ctx.lineTo(x+CR-3,y+CR-3); ctx.stroke(); ctx.restore();
+  ctx.strokeStyle=COL.crateDk; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(x+4,y+4); ctx.lineTo(x+CR-4,y+CR-4); ctx.stroke();
+  rect(x,y,CR,3,COL.crateDk); rect(x,y+CR-3,CR,3,COL.crateDk);
+  rect(x,y,3,CR,COL.crateDk); rect(x+CR-3,y,3,CR,COL.crateDk);
   rect(x+3,y+CR/2-2,CR-6,4,COL.crateDk);
 }
 function drawCheese(x,y){
@@ -3647,14 +3665,20 @@ function shadowAt(x,y,w){
   if(y>FEET+2) return;
   disc(x-camX,FEET+3,w*s,5*s,'rgba(30,50,58,0.55)');
 }
+const _playerDrawOrder = [];
 function drawPlayers(){
   const multi=players.length>1;
   // draw back-to-front so nobody hides behind a later player's tail
-  [...players].map((p,k)=>({p,k})).sort((a,b)=>a.p.b.y-b.p.b.y).forEach(({p,k})=>{
-    if(p.out) return;
+  _playerDrawOrder.length = 0;
+  for(let i=0; i<players.length; i++) _playerDrawOrder.push(i);
+  _playerDrawOrder.sort((a,b)=>players[a].b.y - players[b].b.y);
+  for(let idx=0; idx<_playerDrawOrder.length; idx++){
+    const k = _playerDrawOrder[idx];
+    const p = players[k];
+    if(p.out) continue;
     const fade = p.exitFade !== undefined ? p.exitFade : 1;
     const holo = p.holoAlpha !== undefined ? p.holoAlpha : 1;
-    if(fade <= 0 || holo <= 0) return; // Stepped through the door or dematerialized!
+    if(fade <= 0 || holo <= 0) continue; // Stepped through the door or dematerialized!
     const b=p.b;
     const sc = p.exitScale !== undefined ? p.exitScale : (p.suckScale !== undefined ? p.suckScale : (p.ejectScale !== undefined ? p.ejectScale : 1));
     const rot = p.suckRot || 0;
@@ -3687,7 +3711,7 @@ function drawPlayers(){
       ctx.fillStyle=PCOL[k]; ctx.beginPath(); ctx.moveTo(R(tx-4),R(ty+12)); ctx.lineTo(R(tx+4),R(ty+12)); ctx.lineTo(R(tx),R(ty+16)); ctx.fill();
     }
     ctx.restore();
-  });
+  }
 }
 // ---------- boss ----------
 function drawBoss(){
@@ -3732,6 +3756,10 @@ function drawFx(){
 function hudFrame(){
   rrect(10,10,WNAT-20,HNAT-34,22); ctx.lineWidth=5; ctx.strokeStyle=COL.hud; ctx.stroke();
 }
+const PROG_COLORS = Array.from({length:16}, (_, i) => {
+  const t = i / 15;
+  return `rgb(252,${R(105+t*130)},${R(3+t*50)})`;
+});
 function hudPanels(level,progress,showScore,showTrophies){
   // LEVEL panel
   rrect(24,22,172,78,10); ctx.fillStyle=COL.black; ctx.fill();
@@ -3742,8 +3770,8 @@ function hudPanels(level,progress,showScore,showTrophies){
   text('PROGRESS',WNAT/2,20,2,'#FFFFFF','c','#000');
   rrect(226,38,316,32,16); ctx.fillStyle=COL.hud; ctx.fill();
   for(let i=0;i<16;i++){
-    const on=i<progress, t=i/15;
-    const c=on?`rgb(252,${R(105+t*130)},${R(3+t*50)})`:'#FFFFFF';
+    const on=i<progress;
+    const c=on?PROG_COLORS[i]:'#FFFFFF';
     rrect(238+i*18.6,45,14,18,3); ctx.fillStyle=c; ctx.fill();
   }
   // SCORE panel
@@ -5750,6 +5778,7 @@ function loop(now){
   let dt=now-lastT; lastT=now;
   if(dt>250) dt=STEP;
   accT+=dt;
+  if(accT>STEP*3) accT=STEP*3;
   const pads=pollPads();
   lastPads=pads; lastPadCount=pads.length;
   padEdges(pads);
