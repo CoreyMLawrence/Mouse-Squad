@@ -341,17 +341,45 @@ Y:'X...XX...X.X.X...X....X....X....X..',Z:'XXXXX....X...X...X...X...X....XXXXX',
   };
   const out={}; for(const k in src) out[k]=src[k]; return out;
 })();
+const F5_SPANS = (()=>{
+  const out = {};
+  for(const ch in F5){
+    const g = F5[ch], spans = [];
+    for(let y=0; y<7; y++){
+      let runStart = -1;
+      for(let x=0; x<5; x++){
+        if(g[y*5+x] === 'X'){
+          if(runStart === -1) runStart = x;
+        } else if(runStart !== -1){
+          spans.push(runStart, y, x - runStart);
+          runStart = -1;
+        }
+      }
+      if(runStart !== -1) spans.push(runStart, y, 5 - runStart);
+    }
+    out[ch] = new Int8Array(spans);
+  }
+  return out;
+})();
 function textW(s,px){ return s.length*6*px-px; }
 // draw text; align: 'l' | 'c' | 'r'; bold widens each stroke by 1 native px
 function text(s,x,y,px,col,align='l',shadow=null,bold=false){
   s=String(s).toUpperCase();
   let x0=Math.round(align==='c'?x-textW(s,px)/2:align==='r'?x-textW(s,px):x); y=Math.round(y);
+  const bw=bold?1:0, step=6*px;
   const pass=(dx,dy,c)=>{
-    ctx.fillStyle=c; let cx=x0+dx;
-    for(const ch of s){
-      const g=F5[ch]||F5[' '];
-      for(let i=0;i<35;i++) if(g[i]==='X') ctx.fillRect(cx+(i%5)*px, y+dy+Math.floor(i/5)*px, px+(bold?1:0), px);
-      cx+=6*px;
+    ctx.fillStyle=c;
+    const cy=y+dy;
+    let cx=x0+dx;
+    for(let i=0; i<s.length; i++){
+      const ch=s[i];
+      if(ch!==' '){
+        const sp=F5_SPANS[ch]||F5_SPANS[' '];
+        for(let j=0; j<sp.length; j+=3){
+          ctx.fillRect(cx+sp[j]*px, cy+sp[j+1]*px, sp[j+2]*px+bw, px);
+        }
+      }
+      cx+=step;
     }
   };
   if(shadow) pass(Math.max(1,px>>1),Math.max(1,px>>1),shadow);
