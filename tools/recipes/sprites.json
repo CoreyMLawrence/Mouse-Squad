@@ -1,0 +1,26 @@
+{
+  "pink_select": {
+    "base_frame": "select",
+    "box": [145, 280, 345, 545]
+  },
+  "cyan_select": {
+    "base_frame": "select",
+    "box": [415, 225, 650, 540]
+  },
+  "yellow_select": {
+    "base_frame": "select",
+    "box": [650, 315, 885, 545]
+  },
+  "boss_body_angry": {
+    "base_frame": "boss_angry",
+    "box": [290, 270, 790, 640]
+  },
+  "boss_body_sad": {
+    "base_frame": "boss_sad",
+    "box": [290, 270, 790, 640]
+  },
+  "boss_propeller": {
+    "base_frame": "boss_sad",
+    "box": [405, 272, 645, 365]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "k": 16,
+  "bg_classes": [
+    {"color": "#69EDFC", "tol": 22},
+    {"color": "#FCFCFC", "tol": 10},
+    {"color": "#03B733", "tol": 16},
+    {"color": "#03CF39", "tol": 16},
+    {"color": "#8D5733", "tol": 16},
+    {"color": "#FC3939", "tol": 16},
+    {"color": "#456369", "tol": 16},
+    {"color": "#3F575D", "tol": 16},
+    {"color": "#6F9FA5", "tol": 16}
+  ],
+  "palette": [
+    "#CF2D5D", "#B11B45", "#931539", "#210309",
+    "#FCF393", "#E1D587", "#FCFCFC",
+    "#335DCF", "#8DBDCF", "#F3F3F3",
+    "#F3AB27", "#FCEDC3", "#9F6FE7",
+    "#000000", "#FFFFFF"
+  ]
+}

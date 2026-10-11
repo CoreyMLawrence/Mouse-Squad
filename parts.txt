@@ -1,0 +1,17 @@
+art/parts_raw/clean_0.png
+art/parts_raw/clean_1.png
+art/parts_raw/clean_2.png
+art/parts_raw/stomp_0.png
+art/parts_raw/stomp_1.png
+art/parts_raw/stomp_2.png
+art/parts_raw/victory_0.png
+art/parts_raw/victory_1.png
+art/parts_raw/victory_2.png
+art/parts_raw/victory_3.png
+art/parts_raw/win_0.png
+art/parts_raw/win_1.png
+art/parts_raw/win_2.png
+art/parts_raw/win_3.png
+art/parts_raw/win_4.png
+art/parts_raw/win_5.png
+art/parts_raw/win_6.png

@@ -1,0 +1,16 @@
+{
+  "bg_classes": [
+    {"max_val": 20},
+    {"color_range": ["#1E1E1E", "#3C3C3C"]},
+    {"color": "#03F9FC", "tol": 24},
+    {"color": "#FC03A5", "tol": 24},
+    {"color": "#F9FC39", "tol": 24}
+  ],
+  "palette": [
+    "#696969", "#E1E1DB", "#EDB7B1", "#000000",
+    "#878787", "#EDEDED", "#FCB7B1", "#FFFFFF",
+    "#A020F0", "#FFC0CB",
+    "#575751", "#45453F", "#E1DBD5", "#FCBDC3",
+    "#3FFC03", "#030303", "#757575", "#F3FC39"
+  ]
+}

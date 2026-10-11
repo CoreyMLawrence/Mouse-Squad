@@ -1,0 +1,193 @@
+    if(label==='1 PLAYER'){ titlePhase='mode'; modeSel=soloMode?1:0; }
+    else if(label==='2 PLAYERS'){ beginPlay(2); }
+    else if(label==='SETTINGS'){ enterSettings(); }
+  } else if(titlePhase==='settings'){ settingsConfirm(); }
+  else if(titlePhase==='remap'){ remapNext(); }
+  else if(titlePhase==='mode'){ confirmMode(); }
+  else if(titlePhase==='char'){ confirmChar(); }
+}
+function titleBack(){            // B / Escape
+  if(titlePhase==='settings') titlePhase='menu';   // everything already saved
+  else if(titlePhase==='remap') remapPrev();
+  else if(titlePhase==='mode') titlePhase='menu';
+  else if(titlePhase==='char') titlePhase='mode';
+  // menu root: nothing above
+}
+function titleNav(dx,dy){       // d-pad / arrows
+  if(titlePhase==='menu'){
+    const n=menuItems().length;
+    if(dy) menuSel=(menuSel+(dy>0?1:n-1))%n;
+  } else if(titlePhase==='settings'){
+    if(dy) setSel=(setSel+(dy>0?1:SET_ROWS-1))%SET_ROWS;
+    else if(dx) settingsChange(dx);
+  } else if(titlePhase==='remap'){
+    // d-pad navigates the capture flow; face buttons are captured in padEdges
+    if(dx>0) remapNext();
+    else if(dx<0) remapPrev();
+  } else if(titlePhase==='mode'){
+    if(dy) modeSel=(modeSel+1)%2;
+  } else if(titlePhase==='char'){
+    if(dx) charSel=(charSel+1)%2;
+  }
+}
+// mouse intentionally does nothing in-game (clicks still unlock audio only)
+
+// ---------- orientation & layout ----------
+// portrait touch phone -> tall map + on-screen controls
+// landscape (or any controller) -> wide map, no on-screen controls
+let gamepadOn=false;
+function preferredLayout(){
+  const portrait = innerHeight>innerWidth;
+  return (isTouchDevice && portrait && !gamepadOn) ? LAYOUTS.tall : LAYOUTS.wide;
+}
+function applyLayout(){
+  const portrait = innerHeight>innerWidth;
+  setPadVisible(isTouchDevice && portrait && !gamepadOn);
+  const want=preferredLayout();
+  if(want!==LAY) enterTitle(want);   // map change: back to the title screen
+  else fit();
+}
+addEventListener('resize',()=>setTimeout(applyLayout,60));
+function reset(){
+  winFx=null;
+  if(music){ music.ptr=[0,0,0]; music.loopStart=actx.currentTime+0.15; }
+  player.x=LAY.spawn.x*T; player.y=LAY.spawn.y*T; player.n={x:0,y:-1}; player.v=0; player.air=false;
+  if(players===2){
+    blueW=new Walker(LAY.blueIdle.x*T, LAY.blueIdle.y*T);
+  } else blueW=null;
+  ring.x=(LAY.ringCell.i+0.5)*T; ring.y=(LAY.ringCell.j+0.5)*T;
+  ring.tx=LAY.ringCell.i; ring.ty=LAY.ringCell.j; ring.prev=null;
+  ring.speed=curDiff().spd;              // difficulty sets flee speed
+  ring.tpPhase=0; ring.tpT=0; ring.tpCd=90;
+  trail.length=0;
+  state='play';
+}
+
+// ---------- ring AI ----------
+function ringStep(){
+  const D=curDiff();
+  if(ring.tpCd>0) ring.tpCd--;
+
+  // --- teleport animation in progress (EXPERT): freeze normal movement ---
+  if(ring.tpPhase>0){
+    ring.tpT++;
+    const OUT=8;
+    if(ring.tpPhase===1 && ring.tpT>=OUT){
+      // relocate to the safest far cell at the midpoint
+      ring.tx=ring.tpX; ring.ty=ring.tpY;
+      ring.x=(ring.tx+0.5)*T; ring.y=(ring.ty+0.5)*T; ring.prev=null;
+      ring.tpPhase=2; ring.tpT=0;
+    } else if(ring.tpPhase===2 && ring.tpT>=8){
+      ring.tpPhase=0; ring.tpCd=D.tpCool||150;
+    }
+    ring.bob+=0.05;
+    return;
+  }
+
+  // target cell center
+  const cx=(ring.tx+0.5)*T, cy=(ring.ty+0.5)*T;
+  const dx=cx-ring.x, dy=cy-ring.y;
+  const d=Math.hypot(dx,dy);
+  if(d<ring.speed){
+    ring.x=cx; ring.y=cy;
+
+    // --- EXPERT: teleport when cornered (occasionally, on a cooldown) ---
+    if(D.teleport && ring.tpCd<=0){
+      const here=Math.min(distR?distR[ring.ty][ring.tx]:99,
+                          distB?distB[ring.ty][ring.tx]:99);
+      if(here<=(D.tpNear||4) && Math.random()<(D.tpChance||0.6)){
+        // pick the open cell that maximises min-distance from all players
+        let bi=ring.tx,bj=ring.ty,bs=-1;
+        for(let j=0;j<NJ;j++)for(let i=0;i<NI;i++){
+          if(LAY.maze[j][i]===1) continue;
+          const dd=Math.min(distR?distR[j][i]:99, distB?distB[j][i]:99);
+          if(dd>bs){ bs=dd; bi=i; bj=j; }
+        }
+        if(bs>=6){ ring.tpX=bi; ring.tpY=bj; ring.tpPhase=1; ring.tpT=0; ring.bob+=0.05; return; }
+      }
+    }
+
+    // choose next cell
+    let best=null, bestScore=-1e9;
+    if(D.algo==='smart'){
+      // blocked = players' current + predicted cells (don't route through them)
+      const blocked=new Set();
+      const [rc,rr]=cellOf(player); blocked.add(rc+','+rr);
+      const [pri,prj]=predictedCell(player,D.predict); blocked.add(pri+','+prj);
+      if(blueW){ const [bc,br]=cellOf(blueW); blocked.add(bc+','+br);
+                 const [pbi,pbj]=predictedCell(blueW,D.predict); blocked.add(pbi+','+pbj); }
+      for(const[di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const ni2=ring.tx+di, nj2=ring.ty+dj;
+        if(ni2<0||nj2<0||ni2>=NI||nj2>=NJ||LAY.maze[nj2][ni2]===1) continue;
+        // flee the PREDICTED player position (falls back to current)
+        const fr=(predR&&predR[nj2][ni2]>=0)?predR[nj2][ni2]:(distR?distR[nj2][ni2]:0);
+        const fb=(predB&&predB[nj2][ni2]>=0)?predB[nj2][ni2]:(distB?distB[nj2][ni2]:fr);
+        let score=Math.min(fr,fb);
+        // escape-volume: how much room this choice keeps open
+        score += D.wEsc * escapeCount(ni2,nj2, blocked, D.floodK||10);
+        if(ring.prev && ni2===ring.prev[0] && nj2===ring.prev[1]) score-=2.5;
+        if(D.rnd) score+=Math.random()*D.rnd;
+        if(score>bestScore){bestScore=score;best=[ni2,nj2];}
+      }
+    } else {
+      // EASY: original greedy one-step brain (unchanged)
+      for(const[di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const ni2=ring.tx+di, nj2=ring.ty+dj;
+        if(ni2<0||nj2<0||ni2>=NI||nj2>=NJ||LAY.maze[nj2][ni2]===1) continue;
+        const dR=(distR&&distR[nj2][ni2]>=0)?distR[nj2][ni2]:0;
+        const dB=(distB&&distB[nj2][ni2]>=0)?distB[nj2][ni2]:dR;
+        let score=Math.min(dR,dB);
+        if(D.esc){
+          let deg=0;
+          for(const[ei,ej] of [[1,0],[-1,0],[0,1],[0,-1]]){
+            const ai=ni2+ei, aj=nj2+ej;
+            if(ai>=0&&aj>=0&&ai<NI&&aj<NJ&&LAY.maze[aj][ai]===0) deg++;
+          }
+          score+=(deg-2)*D.esc;
+        }
+        if(ring.prev && ni2===ring.prev[0] && nj2===ring.prev[1]) score-=2.5;
+        score+=Math.random()*D.rnd;
+        if(score>bestScore){bestScore=score;best=[ni2,nj2];}
+      }
+    }
+    if(best){
+      ring.prev=[ring.tx,ring.ty];
+      ring.tx=best[0]; ring.ty=best[1];
+    }
+  } else {
+    ring.x += dx/d*ring.speed;
+    ring.y += dy/d*ring.speed;
+  }
+  ring.bob+=0.05;
+}
+
+// ---------- drawing ----------
+function angLerp(a,b,f){
+  let d=b-a;
+  while(d>Math.PI)d-=2*Math.PI;
+  while(d<-Math.PI)d+=2*Math.PI;
+  return a+d*f;
+}
+const redVis={to:null,from:0,t:99}, blueVis={to:null,from:0,t:99};
+function drawWalker(w, sprA, sprB, trailState, vis){
+  const s = trailState || w;
+  const spr = (!trailState && w.air) ? sprA
+            : (s.animT!==undefined && Math.floor(s.animT/14)%2===0) ? sprA : sprB;
+  const target = Math.atan2(s.n.x, -s.n.y);  // 0 when n=(0,-1)
+  let ang = target;
+  if(vis){
+    if(vis.to===null){ vis.to=target; vis.from=target; vis.t=99; }
+    let d=target-vis.to;
+    while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+    if(Math.abs(d)>0.01){ vis.from=vis.to; vis.to=target; vis.t=0; }
+    vis.t++;
+    if(vis.t<5){
+      // mid-turn: hold the 45-degree halfway pose
+      let h=vis.to-vis.from;
+      while(h>Math.PI)h-=2*Math.PI; while(h<-Math.PI)h+=2*Math.PI;
+      ang = vis.from + h/2;
+    } else ang = vis.to;
+  }
+  ctx.save();
+  ctx.translate(Math.round(s.x), Math.round(s.y));
+  ctx.rotate(ang);
