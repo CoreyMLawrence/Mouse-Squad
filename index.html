@@ -2063,7 +2063,9 @@ function tick(){
   shots=shots.filter(sh=>sh.y<FEET+10);
   if(state!=='play') return;
   const live=alivePlayers(); if(!live.length) return;
-  const maxX=Math.max(...live.map(p=>p.b.x)), avgX=live.reduce((a,p)=>a+p.b.x,0)/live.length;
+  let maxX=live[0].b.x, sumX=0;
+  for(let i=0;i<live.length;i++){ const bx=live[i].b.x; if(bx>maxX) maxX=bx; sumX+=bx; }
+  const avgX=sumX/live.length;
   if(currentLevel===1){
     // Keep l1Zone in sync with player position (for debug/test teleports)
     if(maxX >= 4920 && l1Zone < 3){
@@ -2713,13 +2715,13 @@ function drawCyberspaceScenery(){
 
   const vpx = WNAT / 2;
   ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
   for(let gx = -WNAT; gx <= WNAT * 2; gx += 70){
     const sx = gx - (camX % 70);
-    ctx.beginPath();
     ctx.moveTo(vpx + (sx - vpx) * 0.1, horizonY);
     ctx.lineTo(vpx + (sx - vpx) * 2.2, HNAT);
-    ctx.stroke();
   }
+  ctx.stroke();
 
   for(let k = 1; k <= 9; k++){
     const t = Math.pow(k / 9, 2.2);
@@ -3811,6 +3813,7 @@ function starPath(x,y,ro,ri,n){
 function drawFx(){
   for(const f of fx){
     const x=f.x-camX, a=f.age;
+    if(x<-60||x>WNAT+60) continue;
     if(f.t==='star'){
       const k=Math.min(1,a/10), r=(f.small?40:120)*(0.4+0.6*k);
       ctx.globalAlpha=1-Math.max(0,(a-12)/10);
@@ -3853,12 +3856,14 @@ function hudPanels(level,progress,showScore,showTrophies){
   text(String(showScore).padStart(9,'0'),658,71,2,'#FFFFFF','c');
   // party panel on the bottom edge
   rrect(320,392,128,36,9); ctx.fillStyle=COL.black; ctx.fill(); ctx.lineWidth=4; ctx.strokeStyle=COL.hud; ctx.stroke();
-  MICE.forEach((id,k)=>{
-    const p=players.find(q=>q.id===id);
+  for(let k=0;k<MICE.length;k++){
+    const id=MICE[k];
+    let p=null;
+    for(let j=0;j<players.length;j++){ if(players[j].id===id){ p=players[j]; break; } }
     const dim=showTrophies && (!p || p.out);
     drawSpr(PARTY_ICON[id]+(dim?'_ko':''),346+k*38,414);
     if(p && showTrophies) for(let l=0;l<3;l++) rect(338+k*38+l*6,418,4,4,l<p.lives&&!p.out?'#FFFFFF':'#333');
-  });
+  }
 }
 function hudBossMeter(){
   if(!['roar','walk','hop','stun','throw','hurt','defeat'].includes(boss.state)) return;
@@ -5367,7 +5372,8 @@ function tickDoodle(){
   }
 
   // Camera tracking: scrolls up smoothly and deliberately
-  const minPlayerY = Math.min(...live.map(p => p.b.y));
+  let minPlayerY = live[0].b.y;
+  for(let i = 1; i < live.length; i++){ if(live[i].b.y < minPlayerY) minPlayerY = live[i].b.y; }
   const targetCamY = minPlayerY - 290;
   if(targetCamY < doodleCamY) doodleCamY += (targetCamY - doodleCamY) * 0.12;
 
@@ -5391,7 +5397,8 @@ function tickDoodle(){
   }
 
   // Dynamic Procedural Platform Spawning Ahead
-  let minPlY = Math.min(...doodlePlatforms.map(p => p.y));
+  let minPlY = doodlePlatforms.length ? doodlePlatforms[0].y : 0;
+  for(let i = 1; i < doodlePlatforms.length; i++){ if(doodlePlatforms[i].y < minPlY) minPlY = doodlePlatforms[i].y; }
   while(minPlY > doodleCamY - 350){
     const nextY = minPlY - (46 + Math.random() * 18);
     const pw = 85 + Math.random() * 30;
@@ -5738,10 +5745,14 @@ function renderPlay(){
   }
   for(const e of enemies){
     if(currentLevel===1 && e.zone && e.zone!==l1Zone) continue;
-    if(Math.abs(e.x-camX-WNAT/2)<WNAT) drawEnemy(e);
+    const ex=e.x-camX;
+    if(ex>-80 && ex<WNAT+80) drawEnemy(e);
   }
   if(currentLevel===4) drawBoss();
-  for(const s of shots) drawPencil(s.x-camX,s.y,s.rot,34);
+  for(const s of shots){
+    const sx=s.x-camX;
+    if(sx>-60 && sx<WNAT+60) drawPencil(sx,s.y,s.rot,34);
+  }
   if(currentLevel===4) hudBossMeter();
   drawPlayers();
   for(const k of koFx){ const img=(k.face<0?SPRL:SPR)[k.id+'_idle'];
@@ -5767,7 +5778,9 @@ function renderPlay(){
     ctx.restore();
   }
   hudFrame();
-  const lp=alivePlayers(), lx=lp.length?Math.max(...lp.map(p=>p.b.x)):0;
+  const lp=alivePlayers();
+  let lx=0;
+  for(let i=0;i<lp.length;i++){ if(lp[i].b.x>lx) lx=lp[i].b.x; }
   const prog=arenaLocked?16:Math.min(16,Math.floor(16*lx/ARENA_X));
   const lNum=currentLevel===1?'01':(currentLevel===2?'02':(currentLevel===3?'03':'04'));
   hudPanels(lNum,prog,score,true);
