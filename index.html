@@ -67,6 +67,85 @@
         font-family:monospace;font-size:12px;letter-spacing:2px;box-shadow:0 3px 0 #0a0705;}
   #pausebtn svg{width:15px;height:15px;}
   #pausebtn.on{transform:translateY(2px);box-shadow:0 1px 0 #0a0705;}
+  /* ---- landscape touch controls: transparent overlay directly on top of the game canvas ---- */
+  @media (orientation: landscape) {
+    body.touch { flex-direction: row; }
+    body.touch #wrap {
+      padding: 0;
+      width: 100vw; height: 100vh;
+      flex: 1 1 100%;
+      align-items: center; justify-content: center;
+    }
+    body.touch #pad {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh;
+      background: transparent; border: none;
+      pointer-events: none; z-index: 20;
+      padding: 0;
+      --u: clamp(34px, 10vh, 52px);
+      --ab: clamp(52px, 15vh, 76px);
+    }
+    body.touch #stickzone {
+      position: absolute; left: 0; bottom: 0;
+      width: 42vw; height: 100%;
+      pointer-events: auto;
+    }
+    body.touch #dpad {
+      left: max(24px, env(safe-area-inset-left, 24px));
+      bottom: max(18px, env(safe-area-inset-bottom, 18px));
+      top: auto; transform: none;
+    }
+    body.touch .darm {
+      background: rgba(18, 32, 26, 0.48);
+      border: 1.5px solid rgba(63, 252, 3, 0.4);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    body.touch .darm.on {
+      background: rgba(29, 58, 36, 0.85);
+      color: #e8ffe0;
+      border-color: rgba(232, 255, 224, 0.8);
+    }
+    body.touch #d-mid {
+      background: rgba(18, 32, 26, 0.48);
+      border: none;
+    }
+    body.touch #btnzone {
+      position: absolute; right: 0; bottom: 0;
+      width: 42vw; height: 100%;
+      pointer-events: auto;
+    }
+    body.touch #btns {
+      right: max(26px, env(safe-area-inset-right, 26px));
+      bottom: max(22px, env(safe-area-inset-bottom, 22px));
+      top: auto;
+      transform: rotate(-15deg);
+    }
+    body.touch .ab {
+      background: rgba(225, 51, 207, 0.52);
+      border: 2px solid rgba(255, 255, 255, 0.55);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    body.touch .ab.on {
+      background: rgba(225, 51, 207, 0.88);
+      transform: translateY(3px) scale(0.96);
+    }
+    body.touch #pausebtn {
+      top: max(12px, env(safe-area-inset-top, 12px));
+      right: max(18px, env(safe-area-inset-right, 18px));
+      bottom: auto;
+      background: rgba(13, 26, 16, 0.55);
+      border: 1.5px solid rgba(63, 252, 3, 0.4);
+      padding: 6px 14px;
+      font-size: 11px;
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      pointer-events: auto;
+    }
+  }
 </style>
 </head>
 <body>
@@ -114,6 +193,7 @@ function fit(){
   crtDirty=true;
 }
 addEventListener('resize', ()=>{ fit(); crtDirty=true; });
+addEventListener('orientationchange', ()=>{ setTimeout(fit, 80); crtDirty=true; });
 addEventListener('scroll', ()=>{ crtDirty=true; }, {passive:true});
 
 // ---------- palette (measured from the concept frames) ----------
@@ -5749,7 +5829,7 @@ function startSkateBonusStage(){
   skateMaxCombo = 1;
   skateCamX = 0;
   skateDist = 0;
-  skateSpeed = 7.5;
+  skateSpeed = 4.6;
   skateTargetDist = 7600;
   skateFx = [];
   skateSpeedFx = [];
@@ -5783,80 +5863,86 @@ function buildSkateTrack(){
   skatePickups = [];
   skateFx = [];
 
-  // Section 1 (300 .. 1400): "Street Warmup & Low Rails"
-  skatePlatforms.push({x: 450, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 580, y: 310, w: 220, h: 10, t: 'rail'});
+  // Section 1 (350 .. 1250): "Street Warmup & Low Rails"
+  skatePlatforms.push({x: 420, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
   for(let k = 0; k < 5; k++){
-    skatePickups.push({t: 'cheese', x: 480 + k * 45, y: 270 - Math.sin(k/4 * Math.PI) * 45, basePts: 100, taken: false, ph: k * 0.4});
+    skatePickups.push({t: 'cheese', x: 440 + k * 38, y: 310 - Math.sin(k/4 * Math.PI) * 45, basePts: 100, taken: false, ph: k * 0.4});
   }
-  skatePickups.push({t: 'wheel', x: 640, y: 280, basePts: 300, taken: false, ph: 1});
-  skatePickups.push({t: 'wheel', x: 740, y: 280, basePts: 300, taken: false, ph: 2});
+  skatePlatforms.push({x: 580, y: 300, w: 220, h: 10, t: 'rail'});
+  skatePickups.push({t: 'wheel', x: 640, y: 268, basePts: 300, taken: false, ph: 1});
+  skatePickups.push({t: 'wheel', x: 740, y: 268, basePts: 300, taken: false, ph: 2});
 
-  skatePlatforms.push({x: 900, y: 290, w: 160, h: 12, t: 'awning', col: '#E53935'});
-  skatePickups.push({t: 'apple', x: 980, y: 255, basePts: 250, taken: false, ph: 0});
+  skatePlatforms.push({x: 880, y: 285, w: 160, h: 12, t: 'awning', col: '#E53935'});
+  skatePickups.push({t: 'apple', x: 960, y: 200, basePts: 250, taken: false, ph: 0});
+  for(let k = 0; k < 4; k++){
+    skatePickups.push({t: 'cheese', x: 910 + k * 35, y: 245 - Math.sin(k/3 * Math.PI) * 25, basePts: 100, taken: false, ph: k});
+  }
 
-  // Section 2 (1400 .. 2800): "Downtown Scaffolding & Multi-Tier Rails"
-  skatePlatforms.push({x: 1350, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 1480, y: 310, w: 180, h: 10, t: 'rail'});
-  skatePlatforms.push({x: 1720, y: 235, w: 220, h: 14, t: 'scaffold'});
-  skatePickups.push({t: 'wheel', x: 1780, y: 200, basePts: 300, taken: false, ph: 1});
-  skatePickups.push({t: 'diamond', x: 1880, y: 195, basePts: 1000, taken: false, ph: 2});
+  // Section 2 (1250 .. 2750): "Downtown Scaffolding & Multi-Tier Lines"
+  skatePlatforms.push({x: 1300, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  for(let k = 0; k < 4; k++){
+    skatePickups.push({t: 'cheese', x: 1320 + k * 40, y: 315 - Math.sin(k/3 * Math.PI) * 40, basePts: 100, taken: false, ph: k});
+  }
+  skatePlatforms.push({x: 1460, y: 300, w: 180, h: 10, t: 'rail'});
+  skatePlatforms.push({x: 1700, y: 230, w: 220, h: 14, t: 'scaffold'});
+  skatePickups.push({t: 'wheel', x: 1760, y: 195, basePts: 300, taken: false, ph: 1});
+  skatePickups.push({t: 'diamond', x: 1860, y: 190, basePts: 1000, taken: false, ph: 2});
 
-  skatePlatforms.push({x: 2000, y: 230, w: 140, h: 12, t: 'awning', col: '#2E7D32'});
-  skatePlatforms.push({x: 2200, y: 155, w: 240, h: 14, t: 'rooftop', name: 'PIZZA BILLBOARD'});
-  skatePickups.push({t: 'diamond', x: 2280, y: 115, basePts: 1000, taken: false, ph: 0});
-  skatePickups.push({t: 'trophy', x: 2380, y: 115, basePts: 2000, taken: false, ph: 1});
+  skatePlatforms.push({x: 1980, y: 225, w: 140, h: 12, t: 'awning', col: '#2E7D32'});
+  skatePlatforms.push({x: 2180, y: 145, w: 240, h: 14, t: 'rooftop', name: 'PIZZA TOWER'});
+  skatePickups.push({t: 'diamond', x: 2250, y: 105, basePts: 1000, taken: false, ph: 0});
+  skatePickups.push({t: 'trophy', x: 2350, y: 105, basePts: 2000, taken: false, ph: 1});
 
-  skatePlatforms.push({x: 2480, y: 315, w: 240, h: 10, t: 'rail'});
-  for(let k = 0; k < 4; k++) skatePickups.push({t: 'cheese', x: 2520 + k * 50, y: 280, basePts: 100, taken: false, ph: k});
+  skatePlatforms.push({x: 2480, y: 310, w: 240, h: 10, t: 'rail'});
+  for(let k = 0; k < 5; k++) skatePickups.push({t: 'cheese', x: 2510 + k * 45, y: 275, basePts: 100, taken: false, ph: k});
 
-  // Section 3 (2800 .. 4400): "High Powerline Grind & Rooftop Scramble"
-  skatePlatforms.push({x: 2900, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 3040, y: 250, w: 160, h: 12, t: 'awning', col: '#00ACC1'});
-  skatePlatforms.push({x: 3260, y: 140, w: 320, h: 8, t: 'cable'});
+  // Section 3 (2750 .. 4350): "Powerline Grind & High Wire Action"
+  skatePlatforms.push({x: 2880, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 3020, y: 245, w: 150, h: 12, t: 'awning', col: '#00ACC1'});
+  skatePlatforms.push({x: 3220, y: 135, w: 340, h: 8, t: 'cable'});
   for(let k = 0; k < 6; k++){
-    skatePickups.push({t: (k%2===0 ? 'wheel' : 'diamond'), x: 3300 + k * 50, y: 105, basePts: (k%2===0 ? 500 : 1000), taken: false, ph: k * 0.5});
+    skatePickups.push({t: (k%2===0 ? 'wheel' : 'diamond'), x: 3270 + k * 48, y: 100, basePts: (k%2===0 ? 500 : 1000), taken: false, ph: k * 0.5});
   }
 
-  skatePlatforms.push({x: 3660, y: 225, w: 200, h: 14, t: 'scaffold'});
-  skatePickups.push({t: 'apple', x: 3760, y: 190, basePts: 250, taken: false, ph: 0});
+  skatePlatforms.push({x: 3640, y: 220, w: 200, h: 14, t: 'scaffold'});
+  skatePickups.push({t: 'apple', x: 3740, y: 185, basePts: 250, taken: false, ph: 0});
 
-  skatePlatforms.push({x: 3950, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 4080, y: 305, w: 260, h: 10, t: 'rail'});
-  for(let k = 0; k < 5; k++) skatePickups.push({t: 'cheese', x: 4120 + k * 50, y: 270, basePts: 100, taken: false, ph: k});
+  skatePlatforms.push({x: 3920, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 4040, y: 300, w: 260, h: 10, t: 'rail'});
+  for(let k = 0; k < 5; k++) skatePickups.push({t: 'cheese', x: 4080 + k * 45, y: 265, basePts: 100, taken: false, ph: k});
 
-  // Section 4 (4400 .. 6000): "Apex Skyline & Half-Pipe Rhythms"
-  skatePlatforms.push({x: 4480, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 4620, y: 220, w: 140, h: 12, t: 'awning', col: '#E53935'});
-  skatePlatforms.push({x: 4820, y: 80, w: 280, h: 16, t: 'apex', name: 'SKYLINE TOWER'});
-  skatePickups.push({t: 'diamond', x: 4880, y: 40, basePts: 2500, taken: false, ph: 0});
-  skatePickups.push({t: 'trophy', x: 4960, y: 40, basePts: 2500, taken: false, ph: 1});
-  skatePickups.push({t: 'diamond', x: 5040, y: 40, basePts: 2500, taken: false, ph: 2});
+  // Section 4 (4350 .. 5950): "Apex Skyline & Half-Pipe Rhythms"
+  skatePlatforms.push({x: 4440, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 4580, y: 215, w: 140, h: 12, t: 'awning', col: '#E53935'});
+  skatePlatforms.push({x: 4780, y: 80, w: 280, h: 16, t: 'apex', name: 'SKYLINE APEX'});
+  skatePickups.push({t: 'diamond', x: 4840, y: 40, basePts: 2500, taken: false, ph: 0});
+  skatePickups.push({t: 'trophy', x: 4920, y: 40, basePts: 2500, taken: false, ph: 1});
+  skatePickups.push({t: 'diamond', x: 5000, y: 40, basePts: 2500, taken: false, ph: 2});
 
-  skatePlatforms.push({x: 5160, y: 145, w: 260, h: 8, t: 'cable'});
-  for(let k = 0; k < 4; k++) skatePickups.push({t: 'wheel', x: 5200 + k * 60, y: 110, basePts: 500, taken: false, ph: k});
+  skatePlatforms.push({x: 5120, y: 140, w: 260, h: 8, t: 'cable'});
+  for(let k = 0; k < 4; k++) skatePickups.push({t: 'wheel', x: 5160 + k * 55, y: 105, basePts: 500, taken: false, ph: k});
 
-  skatePlatforms.push({x: 5500, y: 250, w: 200, h: 14, t: 'scaffold'});
-  skatePickups.push({t: 'apple', x: 5600, y: 215, basePts: 250, taken: false, ph: 0});
+  skatePlatforms.push({x: 5440, y: 240, w: 200, h: 14, t: 'scaffold'});
+  skatePickups.push({t: 'apple', x: 5540, y: 205, basePts: 250, taken: false, ph: 0});
 
-  skatePlatforms.push({x: 5780, y: 310, w: 220, h: 10, t: 'rail'});
+  skatePlatforms.push({x: 5720, y: 305, w: 220, h: 10, t: 'rail'});
 
-  // Section 5 (6000 .. 7400): "Supersonic Cheese Frenzy Straightaway"
-  skatePlatforms.push({x: 6050, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 6180, y: 240, w: 160, h: 12, t: 'awning', col: '#FFB300'});
-  skatePlatforms.push({x: 6400, y: 150, w: 320, h: 8, t: 'cable'});
+  // Section 5 (5950 .. 7600): "Supersonic Cheese Frenzy & Grand Launch"
+  skatePlatforms.push({x: 6020, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 6150, y: 235, w: 160, h: 12, t: 'awning', col: '#FFB300'});
+  skatePlatforms.push({x: 6360, y: 145, w: 320, h: 8, t: 'cable'});
   for(let k = 0; k < 6; k++){
-    skatePickups.push({t: 'diamond', x: 6440 + k * 50, y: 115, basePts: 1000, taken: false, ph: k});
+    skatePickups.push({t: 'diamond', x: 6400 + k * 48, y: 110, basePts: 1000, taken: false, ph: k});
   }
 
-  skatePlatforms.push({x: 6800, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
-  skatePlatforms.push({x: 6940, y: 300, w: 240, h: 10, t: 'rail'});
-  for(let k = 0; k < 4; k++) skatePickups.push({t: 'wheel', x: 6980 + k * 55, y: 265, basePts: 300, taken: false, ph: k});
+  skatePlatforms.push({x: 6760, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 6900, y: 295, w: 240, h: 10, t: 'rail'});
+  for(let k = 0; k < 4; k++) skatePickups.push({t: 'wheel', x: 6940 + k * 50, y: 260, basePts: 300, taken: false, ph: k});
 
-  // Finish arch kicker at 7350
-  skatePlatforms.push({x: 7350, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  // Grand Finish Launch Arch at 7280
+  skatePlatforms.push({x: 7280, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
   for(let k = 0; k < 7; k++){
-    skatePickups.push({t: (k === 3 ? 'trophy' : 'diamond'), x: 7420 + k * 45, y: 180 - Math.sin(k/6 * Math.PI) * 80, basePts: (k === 3 ? 3000 : 1500), taken: false, ph: k});
+    skatePickups.push({t: (k === 3 ? 'trophy' : 'diamond'), x: 7350 + k * 42, y: 170 - Math.sin(k/6 * Math.PI) * 85, basePts: (k === 3 ? 3000 : 1500), taken: false, ph: k});
   }
 }
 
@@ -5886,22 +5972,23 @@ function tickSkate(){
   let leadX = 0;
   for(const p of players) if(p.b.x > leadX) leadX = p.b.x;
 
-  const targetCamX = Math.max(0, leadX - 220);
-  skateCamX += (targetCamX - skateCamX) * 0.14;
+  const targetCamX = Math.max(0, leadX - 155);
+  skateCamX += (targetCamX - skateCamX) * 0.12;
 
   for(const p of players){
     const s = readSource(p.src);
 
-    let targetVx = 7.5;
-    if(s.dx > 0) targetVx = 9.2;
-    else if(s.dx < 0) targetVx = 5.2;
-    p.b.vx += (targetVx - p.b.vx) * 0.12;
+    let targetVx = 4.6;
+    if(s.dx > 0) targetVx = 5.8;
+    else if(s.dx < 0) targetVx = 3.2;
+    p.b.vx += (targetVx - p.b.vx) * 0.10;
     p.b.x += p.b.vx;
+    if(p === players[0]) skateSpeed = p.b.vx;
 
     if(p.jq){
       p.jq = false;
       if(p.b.ground){
-        p.b.vy = p.skate.grind ? -12.2 : -11.5;
+        p.b.vy = p.skate.grind ? -11.0 : -10.4;
         p.b.ground = false;
         if(p.skate.grind){
           p.skate.grind = false;
@@ -5913,7 +6000,7 @@ function tickSkate(){
         sfx('jump');
       } else if(p.skate.canDbl || MOUSE_STATS[p.id].dbl){
         p.skate.canDbl = false;
-        p.b.vy = -10.2;
+        p.b.vy = -9.6;
         p.skate.airSpin = Math.PI * 2;
         sfx('jump2');
         skateTotalPts += 500 * skateCombo;
@@ -5927,8 +6014,8 @@ function tickSkate(){
     }
 
     if(!p.b.ground){
-      p.b.vy += 0.38;
-      if(p.b.vy > 12) p.b.vy = 12;
+      p.b.vy += 0.30;
+      if(p.b.vy > 10.5) p.b.vy = 10.5;
     }
     p.b.y += p.b.vy;
 
@@ -5938,7 +6025,7 @@ function tickSkate(){
       if(pl.squash > 0) pl.squash--;
 
       if(pl.t === 'ramp' && p.b.x >= pl.x && p.b.x <= pl.x + pl.w && p.b.y >= FEET - 28 && p.b.y <= FEET + 2){
-        p.b.vy = -14.5;
+        p.b.vy = -12.8;
         p.b.ground = false;
         p.skate.airSpin = Math.PI * 2;
         sfx('spring_super');
@@ -5951,8 +6038,8 @@ function tickSkate(){
         for(let k = 0; k < 8; k++) skateFx.push({t:'star', x: p.b.x + (Math.random()-0.5)*30, y: p.b.y, age: 0, small: false});
       }
 
-      if((pl.t === 'rail' || pl.t === 'cable') && p.b.x >= pl.x - 6 && p.b.x <= pl.x + pl.w + 6){
-        if(p.b.y >= pl.y - 8 && p.b.y <= pl.y + 12 && p.b.vy >= 0){
+      if((pl.t === 'rail' || pl.t === 'cable') && p.b.x >= pl.x - 8 && p.b.x <= pl.x + pl.w + 8){
+        if(p.b.y >= pl.y - 10 && p.b.y <= pl.y + 12 && p.b.vy >= 0){
           p.b.y = pl.y;
           p.b.vy = 0;
           p.b.ground = true;
@@ -5969,10 +6056,10 @@ function tickSkate(){
         }
       }
 
-      if(pl.t === 'awning' && p.b.x >= pl.x - 6 && p.b.x <= pl.x + pl.w + 6){
-        if(p.b.y >= pl.y - 8 && p.b.y <= pl.y + 14 && p.b.vy > 0){
+      if(pl.t === 'awning' && p.b.x >= pl.x - 8 && p.b.x <= pl.x + pl.w + 8){
+        if(p.b.y >= pl.y - 10 && p.b.y <= pl.y + 16 && p.b.vy > 0){
           p.b.y = pl.y - 4;
-          p.b.vy = -15.0;
+          p.b.vy = -13.6;
           p.b.ground = false;
           pl.squash = 12;
           p.skate.canDbl = true;
@@ -5983,8 +6070,8 @@ function tickSkate(){
         }
       }
 
-      if((pl.t === 'scaffold' || pl.t === 'rooftop' || pl.t === 'apex') && p.b.x >= pl.x - 4 && p.b.x <= pl.x + pl.w + 4){
-        if(p.b.y >= pl.y - 6 && p.b.y <= pl.y + 10 && p.b.vy >= 0){
+      if((pl.t === 'scaffold' || pl.t === 'rooftop' || pl.t === 'apex') && p.b.x >= pl.x - 6 && p.b.x <= pl.x + pl.w + 6){
+        if(p.b.y >= pl.y - 8 && p.b.y <= pl.y + 12 && p.b.vy >= 0){
           p.b.y = pl.y;
           p.b.vy = 0;
           p.b.ground = true;
@@ -6050,12 +6137,12 @@ function tickSkate(){
     if(f.age > 45) skateFx.splice(i, 1);
   }
 
-  if(frame % 3 === 0 && skateSpeed > 7.0){
+  if(frame % 3 === 0 && skateSpeed >= 5.3){
     skateSpeedFx.push({
       x: skateCamX + WNAT + 20,
       y: 40 + Math.random() * (HNAT - 90),
-      len: 30 + Math.random() * 45,
-      speed: 14 + Math.random() * 8
+      len: 24 + Math.random() * 36,
+      speed: 12 + Math.random() * 6
     });
   }
   for(let i = skateSpeedFx.length - 1; i >= 0; i--){
@@ -6249,22 +6336,23 @@ function drawSkatePlatform(pl){
 
 function drawSkateCityScenery(){
   const grd = ctx.createLinearGradient(0, 0, 0, HNAT);
-  grd.addColorStop(0, '#0D081E');
-  grd.addColorStop(0.4, '#381242');
-  grd.addColorStop(0.75, '#C2185B');
-  grd.addColorStop(1, '#FF7043');
+  grd.addColorStop(0, '#06060F');
+  grd.addColorStop(0.45, '#120E22');
+  grd.addColorStop(0.8, '#1E1430');
+  grd.addColorStop(1, '#2B1936');
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, WNAT, HNAT);
 
   disc(WNAT - 120, 60, 22, 22, '#FFF9C4');
-  disc(WNAT - 128, 56, 18, 18, '#0D081E');
+  disc(WNAT - 128, 56, 18, 18, '#06060F');
   for(let i = 0; i < 20; i++){
     const stX = ((i * 127 - skateCamX * 0.05) % WNAT + WNAT) % WNAT;
     const stY = 20 + (i * 37) % 130;
     const tw = Math.sin(frame * 0.1 + i) > 0.5 ? 2 : 1;
-    rect(stX, stY, tw, tw, '#FFF');
+    rect(stX, stY, tw, tw, 'rgba(255, 255, 255, 0.7)');
   }
 
+  // Layer 1: Distant skyscrapers (deep muted silhouettes, soft ambient windows)
   const p1 = (skateCamX * 0.12);
   const skyline1 = [
     {w: 90, h: 220}, {w: 60, h: 280}, {w: 110, h: 190}, {w: 75, h: 310},
@@ -6274,11 +6362,11 @@ function drawSkateCityScenery(){
   while(curX < WNAT + 100){
     for(const b of skyline1){
       const bx = curX;
-      rect(bx, FEET - b.h, b.w, b.h + 20, '#24143D');
+      rect(bx, FEET - b.h, b.w, b.h + 20, '#16132A');
       for(let wy = FEET - b.h + 18; wy < FEET - 10; wy += 22){
         for(let wx = bx + 8; wx < bx + b.w - 10; wx += 16){
-          if(Math.sin(wx * 11 + wy) > 0.1){
-            rect(wx, wy, 6, 8, '#FFA726');
+          if(Math.sin(wx * 11 + wy) > 0.35){
+            rect(wx, wy, 5, 7, 'rgba(230, 215, 170, 0.13)');
           }
         }
       }
@@ -6286,56 +6374,67 @@ function drawSkateCityScenery(){
     }
   }
 
-  const p2 = (skateCamX * 0.35);
+  // Layer 2: Midground buildings (clean dark architecture, no cluttering neon signs in gameplay zone)
+  const p2 = (skateCamX * 0.32);
   const skyline2 = [
-    {w: 140, h: 140, neon: 'CHEESE 24/7', nc: COL.gold},
-    {w: 110, h: 180, neon: 'MOUSE SQUAD', nc: COL.magenta},
-    {w: 150, h: 120, neon: 'SKATE CITY', nc: COL.cyan},
-    {w: 130, h: 160, neon: 'TURBO SPEED', nc: COL.hud}
+    {w: 130, h: 140, ant: 18},
+    {w: 110, h: 175, ant: 26},
+    {w: 145, h: 125, ant: 14},
+    {w: 125, h: 160, ant: 22}
   ];
-  curX = -p2 % 570;
+  curX = -p2 % 510;
   while(curX < WNAT + 150){
     for(const b of skyline2){
       const bx = curX;
-      rect(bx, FEET - b.h, b.w, b.h + 20, '#1E232A');
-      rect(bx + 4, FEET - b.h, b.w - 8, 4, '#37474F');
+      rect(bx, FEET - b.h, b.w, b.h + 20, '#171B24');
+      rect(bx + 2, FEET - b.h, b.w - 4, 3, '#2A303D');
 
-      rrect(bx + 15, FEET - b.h + 24, b.w - 30, 22, 3);
-      ctx.fillStyle = '#0F1216'; ctx.fill();
-      ctx.strokeStyle = b.nc; ctx.lineWidth = 1.5; ctx.stroke();
-      text(b.neon, bx + b.w/2, FEET - b.h + 30, 1.8, b.nc, 'c', null, true);
-
+      // Subtle architectural rooftop antenna
+      if(b.ant){
+        rect(bx + 18, FEET - b.h - b.ant, 2, b.ant, '#2C3440');
+        disc(bx + 19, FEET - b.h - b.ant, 2, 2, (Math.floor(frame / 20) % 2 === 0 ? '#E53935' : '#757575'));
+      }
       if(b.h > 150){
-        rect(bx + 20, FEET - b.h - 22, 28, 22, '#4E342E');
-        disc(bx + 34, FEET - b.h - 22, 14, 5, '#5D4037');
-        rect(bx + 24, FEET - b.h, 4, 6, '#37474F');
-        rect(bx + 38, FEET - b.h, 4, 6, '#37474F');
+        rect(bx + b.w - 28, FEET - b.h - 18, 20, 18, '#26222A');
+        disc(bx + b.w - 18, FEET - b.h - 18, 10, 4, '#3A3440');
+      }
+
+      // Soft ambient building windows
+      for(let wy = FEET - b.h + 16; wy < FEET - 14; wy += 20){
+        for(let wx = bx + 12; wx < bx + b.w - 12; wx += 16){
+          if(Math.sin(wx * 7 + wy * 13) > 0.25){
+            rect(wx, wy, 6, 7, 'rgba(240, 230, 200, 0.16)');
+          }
+        }
       }
       curX += b.w + 24;
     }
   }
 
-  rect(0, FEET - 12, WNAT, 12, '#546E7A');
-  rect(0, FEET - 12, WNAT, 2, '#90A4AE');
-  rect(0, FEET, WNAT, HNAT - FEET, '#263238');
+  // Street curb and road (clean, high contrast ground line)
+  rect(0, FEET - 12, WNAT, 12, '#3E4E59');
+  rect(0, FEET - 12, WNAT, 2, '#607D8B');
+  rect(0, FEET, WNAT, HNAT - FEET, '#1E2429');
 
+  // Muted dashed road line
   const dashOff = (skateCamX) % 80;
   for(let dx = -dashOff; dx < WNAT + 40; dx += 80){
-    rect(dx, FEET + 38, 44, 5, '#FBC02D');
-    rect(dx + 2, FEET + 39, 40, 2, '#FFF9C4');
+    rect(dx, FEET + 36, 44, 4, '#6A6342');
+    rect(dx + 2, FEET + 37, 40, 2, '#968C5E');
   }
 
+  // Soft streetlamps
   const lampSpacing = 280;
   const lampStart = Math.floor(skateCamX / lampSpacing) * lampSpacing;
   for(let lx = lampStart - lampSpacing; lx <= skateCamX + WNAT + lampSpacing; lx += lampSpacing){
     const sx = Math.round(lx - skateCamX);
     if(sx > -30 && sx < WNAT + 30){
-      rect(sx - 3, FEET - 110, 6, 110, '#37474F');
-      rect(sx - 3, FEET - 110, 24, 4, '#37474F');
-      rect(sx + 15, FEET - 108, 12, 6, '#546E7A');
-      disc(sx + 21, FEET - 103, 5, 4, '#FFF9C4');
+      rect(sx - 3, FEET - 110, 6, 110, '#2C3440');
+      rect(sx - 3, FEET - 110, 24, 4, '#2C3440');
+      rect(sx + 15, FEET - 108, 12, 6, '#3E4E59');
+      disc(sx + 21, FEET - 103, 4, 3, '#FFF9C4');
       ctx.save();
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = 0.07;
       ctx.fillStyle = '#FFE082';
       ctx.beginPath();
       ctx.moveTo(sx + 21, FEET - 103); ctx.lineTo(sx - 20, FEET); ctx.lineTo(sx + 62, FEET);
@@ -6344,6 +6443,7 @@ function drawSkateCityScenery(){
     }
   }
 
+  // Finish arch at 7600
   const fxArch = Math.round(7600 - skateCamX);
   if(fxArch > -150 && fxArch < WNAT + 150){
     rect(fxArch - 60, FEET - 220, 30, 220, '#212121');
@@ -6375,8 +6475,8 @@ function drawSkateHUD(){
 
   rrect(WNAT/2 - 90, 16, 180, 42, 8); ctx.fillStyle = 'rgba(10,14,18,0.85)'; ctx.fill();
   ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 2; ctx.stroke();
-  const mph = Math.round(skateSpeed * 6.5);
-  const isTurbo = skateSpeed > 8.0;
+  const mph = Math.round(skateSpeed * 10);
+  const isTurbo = skateSpeed >= 5.3;
   text(isTurbo ? 'TURBO SPEED' : 'CRUISE SPEED', WNAT/2, 22, 1.8, isTurbo ? '#FF4081' : '#00E5FF', 'c');
   text(mph + ' MPH', WNAT/2, 36, 3.0, '#FFFFFF', 'c', null, true);
 
@@ -6443,7 +6543,7 @@ function renderSkate(){
   }
 
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1.5;
   for(const sl of skateSpeedFx){
     const lx = sl.x - skateCamX;
