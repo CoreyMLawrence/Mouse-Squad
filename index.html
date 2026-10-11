@@ -378,6 +378,7 @@ Y:'X...XX...X.X.X...X....X....X....X..',Z:'XXXXX....X...X...X...X...X....XXXXX',
 3:'XXXX.....X....X.XXX.....X....XXXXX.',4:'...X...XX..X.X.X..X.XXXXX...X....X.',5:'XXXXXX....XXXX.....X....XX...X.XXX.',
 6:'.XXX.X....X....XXXX.X...XX...X.XXX.',7:'XXXXX....X...X...X...X....X....X...',8:'.XXX.X...XX...X.XXX.X...XX...X.XXX.',
 9:'.XXX.X...XX...X.XXXX....X....X.XXX.','!':'..X....X....X....X....X.........X..','-':'...............XXXXX...............',
+'+':'.......X......XXXXX....X............','*':'.X.X...X...XXXXX...X...X.X..........',
 ':':'.......X..............X............','.':'................................X..','?':'.XXX.X...X....X..XX...X.........X..',
 '>':'X.....X.....X.....X...X...X...X....','<':'....X...X...X...X.....X.....X.....X',' ':'...................................',
 "'":'..X....X...........................',
@@ -474,6 +475,12 @@ let doodleTrampolineUsed = false;
 let savedL3State = null;
 let trampLaunch = null;
 let parachuteDescentActive = false;
+// Skateboarding Victory Bonus Stage (After defeating Level 4 Boss)
+let skateTimer = 0, skateTotalPts = 0, skateCombo = 1, skateComboTimer = 0, skateMaxCombo = 1;
+let skatePhase = 'intro', skateIntroTimer = 0, skateFinishTimer = 0;
+let skateCamX = 0, skateDist = 0, skateSpeed = 7.5, skateTargetDist = 7600;
+let skatePlatforms = [], skatePickups = [], skateFx = [], skateSpeedFx = [];
+let savedL4State = null;
 const CR = 56;                                   // crate size
 const MICE = ['pink', 'cyan', 'yellow'];
 const MOUSE_STATS = {                            // small personality differences
@@ -1675,6 +1682,10 @@ addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Backspace'].includes(e.code)) e.preventDefault();
   if(e.repeat) return;
   if(state==='title' && titlePhase==='remap' && /^Digit[0-9]$/.test(e.code)) remapToggle(parseInt(e.code.slice(5)));
+  if((e.code==='Digit5'||e.code==='KeyK') && (state==='play'||state==='title')){
+    if(!players.length) spawnPlayers([{id:'cyan',src:'kb'}],80);
+    startSkateBonusStage();
+  }
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 const touch={x:0,y:0,a:false,b:false,start:false};
@@ -1712,10 +1723,10 @@ function anyEdge(k){ for(const s of sourceList()){ const e=edge(s,k); if(e) retu
 
 let prePauseState = 'play';
 function togglePause(){
-  if(state==='play' || state==='bonus' || state==='doodle'){ prePauseState=state; state='paused'; pauseSel=0; }
+  if(state==='play' || state==='bonus' || state==='doodle' || state==='skate'){ prePauseState=state; state='paused'; pauseSel=0; }
   else if(state==='paused') state=prePauseState;
 }
-function pauseConfirm(){ if(pauseSel===0) state=prePauseState; else { savedL1State=null; savedL3State=null; toTitle(); } }
+function pauseConfirm(){ if(pauseSel===0) state=prePauseState; else { savedL1State=null; savedL3State=null; savedL4State=null; toTitle(); } }
 addEventListener('gamepadconnected',()=>{ gamepadOn=true; applyLayout(); });
 addEventListener('gamepaddisconnected',()=>{ gamepadOn=false; applyLayout(); });
 
@@ -1859,6 +1870,11 @@ function onBossGone(){
   trophies[3]=true;
   addScore(5000);                                           // boss defeated
   for(const p of alivePlayers()) addScore(500*p.lives);     // lives bonus
+  startSkateBonusStage();
+}
+function finishSkateBonusStage(){
+  skatePhase = 'done';
+  addScore(skateTotalPts);
   newHigh=score>highScore;
   if(newHigh){ highScore=score; try{ localStorage.setItem('ms_high',score); }catch(e){} idbSet('highScore',score); }
   idbSet('lastRun',{score,trophies:trophies.slice(),mice:picks.map(p=>p.id),diff:diffSel,date:Date.now()});
@@ -1890,7 +1906,7 @@ function frameInput(){
       if(edge(p.src,'dy')===-1 || (s.dy<0 && !p.prevUp)) p.upPressed=true;
       p.prevUp=s.dy<0;
     }
-  } else if(state==='bonus' || state==='doodle'){
+  } else if(state==='bonus' || state==='doodle' || state==='skate'){
     for(const p of players){
       if(edge(p.src,'a')||edge(p.src,'b')) p.jq=true;
       if(edge(p.src,'start')) togglePause();
@@ -1912,6 +1928,7 @@ function tick(){
   if(state==='win'||state==='victory'){ stepConfetti(); return; }
   if(state==='bonus'){ tickBonus(); return; }
   if(state==='doodle'){ tickDoodle(); return; }
+  if(state==='skate'){ tickSkate(); return; }
   if(state!=='play') return;
   if(doorEntrySeq.active){ tickDoorEntry(); return; }
 
@@ -5686,6 +5703,788 @@ function drawDoodleParachute(x, y){
   ctx.restore();
 }
 
+// ================= SKATEBOARDING VICTORY BONUS STAGE =================
+const SKATE_BOARDS = {
+  pink: {
+    deckTop: COL.magenta,
+    deckHi: '#FF69B4',
+    deckEdge: '#8A0057',
+    gripStripe: COL.magenta,
+    label: '123',
+    wheelCol: COL.yellow,
+    wheelRim: '#C79A00',
+    bushing: '#E53935'
+  },
+  cyan: {
+    deckTop: COL.cyan,
+    deckHi: '#80FFFF',
+    deckEdge: '#0097A7',
+    gripStripe: COL.cyan,
+    label: 'ABC',
+    wheelCol: COL.magenta,
+    wheelRim: '#AD1457',
+    bushing: '#0288D1'
+  },
+  yellow: {
+    deckTop: COL.yellow,
+    deckHi: '#FFFF8D',
+    deckEdge: '#F57F17',
+    gripStripe: COL.yellow,
+    label: 'DOREMI',
+    wheelCol: COL.cyan,
+    wheelRim: '#00838F',
+    bushing: '#FDD835'
+  }
+};
+
+function startSkateBonusStage(){
+  state = 'skate';
+  stateT = 0;
+  skatePhase = 'intro';
+  skateIntroTimer = 75;
+  skateFinishTimer = 0;
+  skateTotalPts = 0;
+  skateCombo = 1;
+  skateComboTimer = 0;
+  skateMaxCombo = 1;
+  skateCamX = 0;
+  skateDist = 0;
+  skateSpeed = 7.5;
+  skateTargetDist = 7600;
+  skateFx = [];
+  skateSpeedFx = [];
+
+  for(let i = 0; i < players.length; i++){
+    const p = players[i];
+    p.out = false;
+    if(p.lives <= 0) p.lives = 1;
+    p.b.x = 100 + i * 44;
+    p.b.y = FEET;
+    p.b.vx = skateSpeed;
+    p.b.vy = 0;
+    p.b.ground = true;
+    p.skate = {
+      angle: 0,
+      grind: false,
+      airSpin: 0,
+      squash: 0,
+      canDbl: true,
+      sparks: 0
+    };
+  }
+
+  buildSkateTrack();
+  setTrack('street');
+  sfx('secret');
+}
+
+function buildSkateTrack(){
+  skatePlatforms = [];
+  skatePickups = [];
+  skateFx = [];
+
+  // Section 1 (300 .. 1400): "Street Warmup & Low Rails"
+  skatePlatforms.push({x: 450, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 580, y: 310, w: 220, h: 10, t: 'rail'});
+  for(let k = 0; k < 5; k++){
+    skatePickups.push({t: 'cheese', x: 480 + k * 45, y: 270 - Math.sin(k/4 * Math.PI) * 45, basePts: 100, taken: false, ph: k * 0.4});
+  }
+  skatePickups.push({t: 'wheel', x: 640, y: 280, basePts: 300, taken: false, ph: 1});
+  skatePickups.push({t: 'wheel', x: 740, y: 280, basePts: 300, taken: false, ph: 2});
+
+  skatePlatforms.push({x: 900, y: 290, w: 160, h: 12, t: 'awning', col: '#E53935'});
+  skatePickups.push({t: 'apple', x: 980, y: 255, basePts: 250, taken: false, ph: 0});
+
+  // Section 2 (1400 .. 2800): "Downtown Scaffolding & Multi-Tier Rails"
+  skatePlatforms.push({x: 1350, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 1480, y: 310, w: 180, h: 10, t: 'rail'});
+  skatePlatforms.push({x: 1720, y: 235, w: 220, h: 14, t: 'scaffold'});
+  skatePickups.push({t: 'wheel', x: 1780, y: 200, basePts: 300, taken: false, ph: 1});
+  skatePickups.push({t: 'diamond', x: 1880, y: 195, basePts: 1000, taken: false, ph: 2});
+
+  skatePlatforms.push({x: 2000, y: 230, w: 140, h: 12, t: 'awning', col: '#2E7D32'});
+  skatePlatforms.push({x: 2200, y: 155, w: 240, h: 14, t: 'rooftop', name: 'PIZZA BILLBOARD'});
+  skatePickups.push({t: 'diamond', x: 2280, y: 115, basePts: 1000, taken: false, ph: 0});
+  skatePickups.push({t: 'trophy', x: 2380, y: 115, basePts: 2000, taken: false, ph: 1});
+
+  skatePlatforms.push({x: 2480, y: 315, w: 240, h: 10, t: 'rail'});
+  for(let k = 0; k < 4; k++) skatePickups.push({t: 'cheese', x: 2520 + k * 50, y: 280, basePts: 100, taken: false, ph: k});
+
+  // Section 3 (2800 .. 4400): "High Powerline Grind & Rooftop Scramble"
+  skatePlatforms.push({x: 2900, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 3040, y: 250, w: 160, h: 12, t: 'awning', col: '#00ACC1'});
+  skatePlatforms.push({x: 3260, y: 140, w: 320, h: 8, t: 'cable'});
+  for(let k = 0; k < 6; k++){
+    skatePickups.push({t: (k%2===0 ? 'wheel' : 'diamond'), x: 3300 + k * 50, y: 105, basePts: (k%2===0 ? 500 : 1000), taken: false, ph: k * 0.5});
+  }
+
+  skatePlatforms.push({x: 3660, y: 225, w: 200, h: 14, t: 'scaffold'});
+  skatePickups.push({t: 'apple', x: 3760, y: 190, basePts: 250, taken: false, ph: 0});
+
+  skatePlatforms.push({x: 3950, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 4080, y: 305, w: 260, h: 10, t: 'rail'});
+  for(let k = 0; k < 5; k++) skatePickups.push({t: 'cheese', x: 4120 + k * 50, y: 270, basePts: 100, taken: false, ph: k});
+
+  // Section 4 (4400 .. 6000): "Apex Skyline & Half-Pipe Rhythms"
+  skatePlatforms.push({x: 4480, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 4620, y: 220, w: 140, h: 12, t: 'awning', col: '#E53935'});
+  skatePlatforms.push({x: 4820, y: 80, w: 280, h: 16, t: 'apex', name: 'SKYLINE TOWER'});
+  skatePickups.push({t: 'diamond', x: 4880, y: 40, basePts: 2500, taken: false, ph: 0});
+  skatePickups.push({t: 'trophy', x: 4960, y: 40, basePts: 2500, taken: false, ph: 1});
+  skatePickups.push({t: 'diamond', x: 5040, y: 40, basePts: 2500, taken: false, ph: 2});
+
+  skatePlatforms.push({x: 5160, y: 145, w: 260, h: 8, t: 'cable'});
+  for(let k = 0; k < 4; k++) skatePickups.push({t: 'wheel', x: 5200 + k * 60, y: 110, basePts: 500, taken: false, ph: k});
+
+  skatePlatforms.push({x: 5500, y: 250, w: 200, h: 14, t: 'scaffold'});
+  skatePickups.push({t: 'apple', x: 5600, y: 215, basePts: 250, taken: false, ph: 0});
+
+  skatePlatforms.push({x: 5780, y: 310, w: 220, h: 10, t: 'rail'});
+
+  // Section 5 (6000 .. 7400): "Supersonic Cheese Frenzy Straightaway"
+  skatePlatforms.push({x: 6050, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 6180, y: 240, w: 160, h: 12, t: 'awning', col: '#FFB300'});
+  skatePlatforms.push({x: 6400, y: 150, w: 320, h: 8, t: 'cable'});
+  for(let k = 0; k < 6; k++){
+    skatePickups.push({t: 'diamond', x: 6440 + k * 50, y: 115, basePts: 1000, taken: false, ph: k});
+  }
+
+  skatePlatforms.push({x: 6800, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  skatePlatforms.push({x: 6940, y: 300, w: 240, h: 10, t: 'rail'});
+  for(let k = 0; k < 4; k++) skatePickups.push({t: 'wheel', x: 6980 + k * 55, y: 265, basePts: 300, taken: false, ph: k});
+
+  // Finish arch kicker at 7350
+  skatePlatforms.push({x: 7350, y: FEET - 22, w: 56, h: 22, t: 'ramp'});
+  for(let k = 0; k < 7; k++){
+    skatePickups.push({t: (k === 3 ? 'trophy' : 'diamond'), x: 7420 + k * 45, y: 180 - Math.sin(k/6 * Math.PI) * 80, basePts: (k === 3 ? 3000 : 1500), taken: false, ph: k});
+  }
+}
+
+function tickSkate(){
+  frame++;
+  stateT++;
+  if(skatePhase === 'intro'){
+    skateIntroTimer--;
+    if(skateIntroTimer <= 0){
+      skatePhase = 'play';
+      sfx('confirm');
+    }
+  }
+
+  if(skatePhase === 'finish'){
+    skateFinishTimer--;
+    for(const p of confetti){
+      p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      if(p.y > HNAT) p.y = -10;
+    }
+    if(skateFinishTimer <= 0){
+      finishSkateBonusStage();
+      return;
+    }
+  }
+
+  let leadX = 0;
+  for(const p of players) if(p.b.x > leadX) leadX = p.b.x;
+
+  const targetCamX = Math.max(0, leadX - 220);
+  skateCamX += (targetCamX - skateCamX) * 0.14;
+
+  for(const p of players){
+    const s = readSource(p.src);
+
+    let targetVx = 7.5;
+    if(s.dx > 0) targetVx = 9.2;
+    else if(s.dx < 0) targetVx = 5.2;
+    p.b.vx += (targetVx - p.b.vx) * 0.12;
+    p.b.x += p.b.vx;
+
+    if(p.jq){
+      p.jq = false;
+      if(p.b.ground){
+        p.b.vy = p.skate.grind ? -12.2 : -11.5;
+        p.b.ground = false;
+        if(p.skate.grind){
+          p.skate.grind = false;
+          skateTotalPts += 250 * skateCombo;
+          skateFx.push({t:'pts', x: p.b.x, y: p.b.y - 35, txt: 'RAIL HOP! +250', col: COL.gold});
+        }
+        p.skate.canDbl = true;
+        p.skate.squash = 6;
+        sfx('jump');
+      } else if(p.skate.canDbl || MOUSE_STATS[p.id].dbl){
+        p.skate.canDbl = false;
+        p.b.vy = -10.2;
+        p.skate.airSpin = Math.PI * 2;
+        sfx('jump2');
+        skateTotalPts += 500 * skateCombo;
+        skateCombo = Math.min(8, skateCombo + 1);
+        skateComboTimer = 100;
+        if(skateCombo > skateMaxCombo) skateMaxCombo = skateCombo;
+        sfxCombo(skateCombo);
+        skateFx.push({t:'pts', x: p.b.x, y: p.b.y - 35, txt: 'KICKFLIP! +500', big: true, col: COL.hud});
+        for(let k = 0; k < 6; k++) skateFx.push({t:'star', x: p.b.x + (Math.random()-0.5)*20, y: p.b.y - 10, age: 0, small: true});
+      }
+    }
+
+    if(!p.b.ground){
+      p.b.vy += 0.38;
+      if(p.b.vy > 12) p.b.vy = 12;
+    }
+    p.b.y += p.b.vy;
+
+    let onPl = false;
+    p.skate.grind = false;
+    for(const pl of skatePlatforms){
+      if(pl.squash > 0) pl.squash--;
+
+      if(pl.t === 'ramp' && p.b.x >= pl.x && p.b.x <= pl.x + pl.w && p.b.y >= FEET - 28 && p.b.y <= FEET + 2){
+        p.b.vy = -14.5;
+        p.b.ground = false;
+        p.skate.airSpin = Math.PI * 2;
+        sfx('spring_super');
+        skateTotalPts += 500 * skateCombo;
+        skateCombo = Math.min(8, skateCombo + 1);
+        skateComboTimer = 100;
+        if(skateCombo > skateMaxCombo) skateMaxCombo = skateCombo;
+        sfxCombo(skateCombo);
+        skateFx.push({t:'pts', x: p.b.x, y: p.b.y - 45, txt: 'SICK AIR! +500', big: true, col: COL.hud});
+        for(let k = 0; k < 8; k++) skateFx.push({t:'star', x: p.b.x + (Math.random()-0.5)*30, y: p.b.y, age: 0, small: false});
+      }
+
+      if((pl.t === 'rail' || pl.t === 'cable') && p.b.x >= pl.x - 6 && p.b.x <= pl.x + pl.w + 6){
+        if(p.b.y >= pl.y - 8 && p.b.y <= pl.y + 12 && p.b.vy >= 0){
+          p.b.y = pl.y;
+          p.b.vy = 0;
+          p.b.ground = true;
+          p.skate.grind = true;
+          p.skate.canDbl = true;
+          onPl = true;
+          if(frame % 2 === 0){
+            skateFx.push({t:'grind_spark', x: p.b.x + (Math.random()-0.5)*16, y: pl.y + 2, age: 0});
+          }
+          if(frame % 4 === 0){
+            skateTotalPts += 20 * skateCombo;
+            skateComboTimer = 100;
+          }
+        }
+      }
+
+      if(pl.t === 'awning' && p.b.x >= pl.x - 6 && p.b.x <= pl.x + pl.w + 6){
+        if(p.b.y >= pl.y - 8 && p.b.y <= pl.y + 14 && p.b.vy > 0){
+          p.b.y = pl.y - 4;
+          p.b.vy = -15.0;
+          p.b.ground = false;
+          pl.squash = 12;
+          p.skate.canDbl = true;
+          sfx('spring');
+          skateTotalPts += 300 * skateCombo;
+          skateFx.push({t:'pts', x: p.b.x, y: pl.y - 25, txt: 'SUPER BOUNCE! +300', col: COL.gold});
+          for(let k = 0; k < 6; k++) skateFx.push({t:'spark', x: p.b.x + (Math.random()-0.5)*20, y: pl.y, age: 0});
+        }
+      }
+
+      if((pl.t === 'scaffold' || pl.t === 'rooftop' || pl.t === 'apex') && p.b.x >= pl.x - 4 && p.b.x <= pl.x + pl.w + 4){
+        if(p.b.y >= pl.y - 6 && p.b.y <= pl.y + 10 && p.b.vy >= 0){
+          p.b.y = pl.y;
+          p.b.vy = 0;
+          p.b.ground = true;
+          p.skate.canDbl = true;
+          onPl = true;
+        }
+      }
+    }
+
+    if(p.b.y >= FEET){
+      p.b.y = FEET;
+      p.b.vy = 0;
+      p.b.ground = true;
+      p.skate.canDbl = true;
+      onPl = true;
+    }
+    if(!onPl && !p.skate.grind) p.b.ground = false;
+
+    if(p.skate.airSpin > 0){
+      p.skate.angle += 0.38;
+      p.skate.airSpin -= 0.38;
+      if(p.skate.airSpin <= 0){
+        p.skate.airSpin = 0;
+        p.skate.angle = 0;
+      }
+    } else if(p.b.ground){
+      p.skate.angle = 0;
+    } else {
+      if(p.b.vy < -2) p.skate.angle = -0.22;
+      else if(p.b.vy > 2) p.skate.angle = 0.18;
+      else p.skate.angle = 0;
+    }
+
+    for(const pk of skatePickups){
+      if(pk.taken) continue;
+      if(Math.hypot(p.b.x - pk.x, (p.b.y - 12) - pk.y) < 38){
+        pk.taken = true;
+        const pts = pk.basePts * skateCombo;
+        skateTotalPts += pts;
+        skateCombo = Math.min(8, skateCombo + 1);
+        skateComboTimer = 100;
+        if(skateCombo > skateMaxCombo) skateMaxCombo = skateCombo;
+        sfxCombo(skateCombo);
+        sfx('cheese');
+        skateFx.push({t:'pts', x: pk.x, y: pk.y - 18, txt: '+' + pts, big: (skateCombo >= 4), col: (pk.t==='diamond'||pk.t==='trophy'?COL.gold:undefined)});
+        if(pk.t === 'diamond' || pk.t === 'trophy'){
+          skateFx.push({t:'star', x: pk.x, y: pk.y, age: 0, small: false});
+        } else {
+          skateFx.push({t:'spark', x: pk.x, y: pk.y, age: 0});
+        }
+      }
+    }
+  }
+
+  if(skateComboTimer > 0){
+    skateComboTimer--;
+    if(skateComboTimer === 0) skateCombo = 1;
+  }
+
+  for(let i = skateFx.length - 1; i >= 0; i--){
+    const f = skateFx[i]; f.age++;
+    if(f.t === 'grind_spark'){ f.x -= 3; f.y -= 1; }
+    if(f.age > 45) skateFx.splice(i, 1);
+  }
+
+  if(frame % 3 === 0 && skateSpeed > 7.0){
+    skateSpeedFx.push({
+      x: skateCamX + WNAT + 20,
+      y: 40 + Math.random() * (HNAT - 90),
+      len: 30 + Math.random() * 45,
+      speed: 14 + Math.random() * 8
+    });
+  }
+  for(let i = skateSpeedFx.length - 1; i >= 0; i--){
+    const sl = skateSpeedFx[i];
+    sl.x -= sl.speed;
+    if(sl.x + sl.len < skateCamX) skateSpeedFx.splice(i, 1);
+  }
+
+  if(leadX >= skateTargetDist && skatePhase === 'play'){
+    skatePhase = 'finish';
+    skateFinishTimer = 180;
+    skateTotalPts += 5000;
+    sfx('trophy');
+    winJingle();
+    skateFx.push({t:'pts', x: WNAT/2, y: 180, txt: 'BONUS STAGE CLEARED! +5000', big: true, col: COL.hud});
+    for(let i = 0; i < 60; i++){
+      confetti.push({
+        x: WNAT/2 + (Math.random() - 0.5) * 360,
+        y: -10,
+        vx: (Math.random() - 0.5) * 4,
+        vy: 1 + Math.random() * 3.5,
+        r: 0, vr: 0.1,
+        c: [COL.hud, COL.gold, COL.magenta, COL.cyan][Math.floor(Math.random()*4)],
+        s: 'r', w: 8
+      });
+    }
+  }
+}
+
+function drawSkateboardAndMouse(p){
+  const conf = SKATE_BOARDS[p.id] || SKATE_BOARDS.cyan;
+  const sx = Math.round(p.b.x - skateCamX);
+  const sy = Math.round(p.b.y);
+  const ang = p.skate.angle || 0;
+  const sq = p.skate.squash || 0;
+
+  if(p.b.ground || sy >= FEET - 12){
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    disc(sx, Math.min(FEET + 2, sy + 3), 26, 6, '#18242A');
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(sx, sy - 5);
+  if(ang !== 0) ctx.rotate(ang);
+
+  const wheelSpin = (p.b.x * 0.35) % (Math.PI * 2);
+  const wheelR = 4;
+  const wheelY = 4 + sq * 0.4;
+  const wheelX1 = -16, wheelX2 = 16;
+
+  disc(wheelX1, wheelY, wheelR, wheelR, conf.wheelCol);
+  ctx.strokeStyle = conf.wheelRim; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(wheelX1, wheelY, wheelR, 0, Math.PI * 2); ctx.stroke();
+  rect(wheelX1 - 1, wheelY - 1, 2, 2, '#1E252B');
+  rect(wheelX1 + Math.cos(wheelSpin) * 2 - 0.5, wheelY + Math.sin(wheelSpin) * 2 - 0.5, 1.5, 1.5, '#FFFFFF');
+
+  disc(wheelX2, wheelY, wheelR, wheelR, conf.wheelCol);
+  ctx.strokeStyle = conf.wheelRim; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(wheelX2, wheelY, wheelR, 0, Math.PI * 2); ctx.stroke();
+  rect(wheelX2 - 1, wheelY - 1, 2, 2, '#1E252B');
+  rect(wheelX2 + Math.cos(wheelSpin) * 2 - 0.5, wheelY + Math.sin(wheelSpin) * 2 - 0.5, 1.5, 1.5, '#FFFFFF');
+
+  rect(wheelX1 - 3, 1, 6, 3, '#78909C');
+  rect(wheelX1 - 2, 0, 4, 2, conf.bushing);
+  rect(wheelX2 - 3, 1, 6, 3, '#78909C');
+  rect(wheelX2 - 2, 0, 4, 2, conf.bushing);
+
+  ctx.fillStyle = conf.deckEdge;
+  ctx.beginPath();
+  ctx.moveTo(-25, -2); ctx.lineTo(-21, 1); ctx.lineTo(21, 1);
+  ctx.lineTo(25, -2); ctx.lineTo(23, -4); ctx.lineTo(-23, -4);
+  ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = conf.deckTop;
+  ctx.beginPath();
+  ctx.moveTo(-24, -3); ctx.lineTo(-20, 0); ctx.lineTo(20, 0);
+  ctx.lineTo(24, -3); ctx.lineTo(22, -5); ctx.lineTo(-22, -5);
+  ctx.closePath(); ctx.fill();
+
+  ctx.strokeStyle = conf.deckHi; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-21, -4.5); ctx.lineTo(-19, -0.5); ctx.lineTo(19, -0.5); ctx.lineTo(21, -4.5);
+  ctx.stroke();
+
+  rrect(-18, -4, 36, 3, 1); ctx.fillStyle = '#1A1D20'; ctx.fill();
+  rect(-15, -3, 30, 1.2, conf.gripStripe);
+  text(conf.label, 8, -4, 1.4, '#FFFFFF', 'c');
+
+  if(p.skate.grind){
+    for(let k = 0; k < 2; k++){
+      const spx = (Math.random() < 0.5 ? wheelX1 : wheelX2) + (Math.random() - 0.5) * 4;
+      rect(spx, wheelY + 1 + Math.random() * 2, 2, 2, Math.random() < 0.5 ? '#FFF' : COL.gold);
+    }
+  }
+
+  const fr = p.b.ground ? (p.skate.grind ? 'w2' : (p.b.vx > 8 ? 'w3' : 'w1')) : 'jump';
+  const img = SPR[p.id + '_' + fr] || SPR[p.id + '_idle'];
+  if(img){
+    const crouchY = p.b.ground ? 3 : 0;
+    const drawY = Math.round(-4 - img.height + crouchY);
+    const drawX = Math.round(-img.width / 2);
+    ctx.drawImage(ATLAS, img.sx, img.sy, img.width, img.height, drawX, drawY, img.width, img.height);
+  }
+
+  ctx.restore();
+}
+
+function drawSkatePlatform(pl){
+  const sx = Math.round(pl.x - skateCamX);
+  const w = pl.w, h = pl.h, y = pl.y;
+  if(sx + w < -50 || sx > WNAT + 50) return;
+  const sq = pl.squash || 0;
+
+  if(pl.t === 'ramp'){
+    ctx.fillStyle = '#C2834A';
+    ctx.beginPath();
+    ctx.moveTo(sx, y + h); ctx.lineTo(sx + w, y + h); ctx.lineTo(sx + w, y);
+    ctx.closePath(); ctx.fill();
+    rect(sx, y + h - 3, 10, 3, '#90A4AE');
+    for(let k = 0; k < h; k += 6){
+      rect(sx + w - 4, y + k, 4, 3, (k % 12 === 0) ? '#FBC02D' : '#212121');
+    }
+    ctx.strokeStyle = '#D99B68'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx + 6, y + h - 2); ctx.lineTo(sx + w, y + 2);
+    ctx.stroke();
+    text('^', sx + w/2 + 4, y + h/2 + 2, 1.8, '#FFF', 'c', '#000');
+  } else if(pl.t === 'rail'){
+    const posts = [sx + 14, sx + w/2, sx + w - 14];
+    for(const px of posts){
+      rect(px - 3, y + h, 6, FEET - (y + h), '#455A64');
+      rect(px - 5, FEET - 4, 10, 4, '#78909C');
+    }
+    rrect(sx, y, w, h, 4); ctx.fillStyle = '#FBC02D'; ctx.fill();
+    rect(sx + 2, y + 1, w - 4, 2, '#FFF9C4');
+    rect(sx + 2, y + h - 3, w - 4, 2, '#F57F17');
+    for(let k = sx + 8; k < sx + w - 8; k += 24){
+      rect(k, y + 2, 8, h - 4, '#212121');
+    }
+    disc(sx + 3, y + h/2, 4, 4, '#F57F17');
+    disc(sx + w - 3, y + h/2, 4, 4, '#F57F17');
+  } else if(pl.t === 'cable'){
+    rect(sx - 4, y - 6, 8, FEET - y + 6, '#4E342E');
+    rect(sx + w - 4, y - 6, 8, FEET - y + 6, '#4E342E');
+    disc(sx, y - 4, 4, 4, '#78909C');
+    disc(sx + w, y - 4, 4, 4, '#78909C');
+    ctx.strokeStyle = '#263238'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx, y); ctx.quadraticCurveTo(sx + w/2, y + 5, sx + w, y);
+    ctx.stroke();
+    ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 1.2;
+    ctx.stroke();
+  } else if(pl.t === 'awning'){
+    const col = pl.col || '#E53935';
+    const py = y + sq;
+    rrect(sx, py, w, h, 4); ctx.fillStyle = col; ctx.fill();
+    for(let k = sx + 6; k < sx + w; k += 20){
+      rect(k, py, 10, h, '#FFFFFF');
+    }
+    for(let k = sx + 5; k < sx + w; k += 10){
+      disc(k, py + h, 5, 4, (Math.floor((k-sx)/10)%2===0 ? col : '#FFFFFF'));
+    }
+    rect(sx, py - 4, w, 4, '#37474F');
+  } else if(pl.t === 'scaffold'){
+    ctx.strokeStyle = '#78909C'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(sx + 10, y + h); ctx.lineTo(sx + w/2, y + 70); ctx.lineTo(sx + w - 10, y + h);
+    ctx.moveTo(sx + 10, y + 70); ctx.lineTo(sx + w - 10, y + 70);
+    ctx.stroke();
+    rrect(sx, y, w, h, 2); ctx.fillStyle = '#B26A38'; ctx.fill();
+    rect(sx + 2, y + 1, w - 4, 2, '#D3915F');
+    rect(sx + 2, y + h - 3, w - 4, 2, '#7C431C');
+    rect(sx + 8, y, 4, h, '#546E7A');
+    rect(sx + w - 12, y, 4, h, '#546E7A');
+  } else if(pl.t === 'rooftop' || pl.t === 'apex'){
+    rrect(sx, y, w, h, 3); ctx.fillStyle = '#37474F'; ctx.fill();
+    rect(sx + 2, y + 1, w - 4, 3, '#78909C');
+    rect(sx + 2, y + h - 4, w - 4, 4, '#212121');
+    if(pl.name){
+      const bw = w - 40, bh = 34, bx = sx + 20, by = y - bh - 6;
+      rrect(bx, by, bw, bh, 4); ctx.fillStyle = '#0F151C'; ctx.fill();
+      ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 2; ctx.stroke();
+      text(pl.name, bx + bw/2, by + 10, 2, COL.gold, 'c', null, true);
+      rect(bx + 10, by + bh, 4, 6, '#78909C');
+      rect(bx + bw - 14, by + bh, 4, 6, '#78909C');
+    }
+  }
+}
+
+function drawSkateCityScenery(){
+  const grd = ctx.createLinearGradient(0, 0, 0, HNAT);
+  grd.addColorStop(0, '#0D081E');
+  grd.addColorStop(0.4, '#381242');
+  grd.addColorStop(0.75, '#C2185B');
+  grd.addColorStop(1, '#FF7043');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, WNAT, HNAT);
+
+  disc(WNAT - 120, 60, 22, 22, '#FFF9C4');
+  disc(WNAT - 128, 56, 18, 18, '#0D081E');
+  for(let i = 0; i < 20; i++){
+    const stX = ((i * 127 - skateCamX * 0.05) % WNAT + WNAT) % WNAT;
+    const stY = 20 + (i * 37) % 130;
+    const tw = Math.sin(frame * 0.1 + i) > 0.5 ? 2 : 1;
+    rect(stX, stY, tw, tw, '#FFF');
+  }
+
+  const p1 = (skateCamX * 0.12);
+  const skyline1 = [
+    {w: 90, h: 220}, {w: 60, h: 280}, {w: 110, h: 190}, {w: 75, h: 310},
+    {w: 80, h: 240}, {w: 100, h: 200}, {w: 65, h: 330}, {w: 90, h: 210}
+  ];
+  let curX = -p1 % 670;
+  while(curX < WNAT + 100){
+    for(const b of skyline1){
+      const bx = curX;
+      rect(bx, FEET - b.h, b.w, b.h + 20, '#24143D');
+      for(let wy = FEET - b.h + 18; wy < FEET - 10; wy += 22){
+        for(let wx = bx + 8; wx < bx + b.w - 10; wx += 16){
+          if(Math.sin(wx * 11 + wy) > 0.1){
+            rect(wx, wy, 6, 8, '#FFA726');
+          }
+        }
+      }
+      curX += b.w + 14;
+    }
+  }
+
+  const p2 = (skateCamX * 0.35);
+  const skyline2 = [
+    {w: 140, h: 140, neon: 'CHEESE 24/7', nc: COL.gold},
+    {w: 110, h: 180, neon: 'MOUSE SQUAD', nc: COL.magenta},
+    {w: 150, h: 120, neon: 'SKATE CITY', nc: COL.cyan},
+    {w: 130, h: 160, neon: 'TURBO SPEED', nc: COL.hud}
+  ];
+  curX = -p2 % 570;
+  while(curX < WNAT + 150){
+    for(const b of skyline2){
+      const bx = curX;
+      rect(bx, FEET - b.h, b.w, b.h + 20, '#1E232A');
+      rect(bx + 4, FEET - b.h, b.w - 8, 4, '#37474F');
+
+      rrect(bx + 15, FEET - b.h + 24, b.w - 30, 22, 3);
+      ctx.fillStyle = '#0F1216'; ctx.fill();
+      ctx.strokeStyle = b.nc; ctx.lineWidth = 1.5; ctx.stroke();
+      text(b.neon, bx + b.w/2, FEET - b.h + 30, 1.8, b.nc, 'c', null, true);
+
+      if(b.h > 150){
+        rect(bx + 20, FEET - b.h - 22, 28, 22, '#4E342E');
+        disc(bx + 34, FEET - b.h - 22, 14, 5, '#5D4037');
+        rect(bx + 24, FEET - b.h, 4, 6, '#37474F');
+        rect(bx + 38, FEET - b.h, 4, 6, '#37474F');
+      }
+      curX += b.w + 24;
+    }
+  }
+
+  rect(0, FEET - 12, WNAT, 12, '#546E7A');
+  rect(0, FEET - 12, WNAT, 2, '#90A4AE');
+  rect(0, FEET, WNAT, HNAT - FEET, '#263238');
+
+  const dashOff = (skateCamX) % 80;
+  for(let dx = -dashOff; dx < WNAT + 40; dx += 80){
+    rect(dx, FEET + 38, 44, 5, '#FBC02D');
+    rect(dx + 2, FEET + 39, 40, 2, '#FFF9C4');
+  }
+
+  const lampSpacing = 280;
+  const lampStart = Math.floor(skateCamX / lampSpacing) * lampSpacing;
+  for(let lx = lampStart - lampSpacing; lx <= skateCamX + WNAT + lampSpacing; lx += lampSpacing){
+    const sx = Math.round(lx - skateCamX);
+    if(sx > -30 && sx < WNAT + 30){
+      rect(sx - 3, FEET - 110, 6, 110, '#37474F');
+      rect(sx - 3, FEET - 110, 24, 4, '#37474F');
+      rect(sx + 15, FEET - 108, 12, 6, '#546E7A');
+      disc(sx + 21, FEET - 103, 5, 4, '#FFF9C4');
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#FFE082';
+      ctx.beginPath();
+      ctx.moveTo(sx + 21, FEET - 103); ctx.lineTo(sx - 20, FEET); ctx.lineTo(sx + 62, FEET);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  const fxArch = Math.round(7600 - skateCamX);
+  if(fxArch > -150 && fxArch < WNAT + 150){
+    rect(fxArch - 60, FEET - 220, 30, 220, '#212121');
+    rect(fxArch + 60, FEET - 220, 30, 220, '#212121');
+    for(let ty = FEET - 220; ty < FEET; ty += 18){
+      rect(fxArch - 60 + ((ty % 36 === 0) ? 0 : 15), ty, 15, 18, '#FFFFFF');
+      rect(fxArch + 60 + ((ty % 36 === 0) ? 0 : 15), ty, 15, 18, '#FFFFFF');
+    }
+    rrect(fxArch - 80, FEET - 235, 190, 40, 6);
+    ctx.fillStyle = '#0F151C'; ctx.fill();
+    ctx.strokeStyle = COL.hud; ctx.lineWidth = 3; ctx.stroke();
+    for(let bx = fxArch - 70; bx < fxArch + 100; bx += 14){
+      disc(bx, FEET - 238, 3, 3, (Math.floor((frame + bx)/8)%2===0 ? '#FFF' : COL.gold));
+    }
+    text('FINISH LINE', fxArch + 15, FEET - 225, 3.2, '#FFFFFF', 'c', '#000', true);
+
+    for(let cx = fxArch - 80; cx < fxArch + 100; cx += 16){
+      rect(cx, FEET, 8, 8, '#FFFFFF');
+      rect(cx + 8, FEET + 8, 8, 8, '#FFFFFF');
+    }
+  }
+}
+
+function drawSkateHUD(){
+  rrect(20, 16, 175, 46, 8); ctx.fillStyle = 'rgba(10,14,18,0.85)'; ctx.fill();
+  ctx.strokeStyle = COL.hud; ctx.lineWidth = 2; ctx.stroke();
+  text('BONUS SCORE', 32, 22, 1.8, COL.hud, 'l');
+  text('+' + skateTotalPts, 32, 38, 3.4, COL.gold, 'l', null, true);
+
+  rrect(WNAT/2 - 90, 16, 180, 42, 8); ctx.fillStyle = 'rgba(10,14,18,0.85)'; ctx.fill();
+  ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 2; ctx.stroke();
+  const mph = Math.round(skateSpeed * 6.5);
+  const isTurbo = skateSpeed > 8.0;
+  text(isTurbo ? 'TURBO SPEED' : 'CRUISE SPEED', WNAT/2, 22, 1.8, isTurbo ? '#FF4081' : '#00E5FF', 'c');
+  text(mph + ' MPH', WNAT/2, 36, 3.0, '#FFFFFF', 'c', null, true);
+
+  rrect(WNAT - 195, 16, 175, 42, 8); ctx.fillStyle = 'rgba(10,14,18,0.85)'; ctx.fill();
+  ctx.strokeStyle = COL.gold; ctx.lineWidth = 2; ctx.stroke();
+  text('COURSE PROGRESS', WNAT - 108, 22, 1.8, COL.gold, 'c');
+  rrect(WNAT - 180, 36, 145, 12, 4); ctx.fillStyle = '#212121'; ctx.fill();
+  const progRatio = Math.max(0, Math.min(1, skateCamX / skateTargetDist));
+  rrect(WNAT - 180, 36, 145 * progRatio, 12, 4); ctx.fillStyle = COL.hud; ctx.fill();
+  rect(WNAT - 180 + 140 * progRatio, 38, 4, 8, '#FFFFFF');
+
+  if(skateCombo >= 2){
+    const cx = WNAT - 120, cy = HNAT - 36;
+    rrect(cx - 70, cy - 18, 140, 36, 8); ctx.fillStyle = 'rgba(10,14,18,0.9)'; ctx.fill();
+    ctx.strokeStyle = skateCombo >= 5 ? COL.hud : COL.gold; ctx.lineWidth = 2.5; ctx.stroke();
+    const comboTitle = skateCombo >= 8 ? '8X MEGA SKATER!' : (skateCombo >= 5 ? skateCombo + 'X FRENZY!' : skateCombo + 'X COMBO');
+    text(comboTitle, cx, cy - 12, 2.0, skateCombo >= 5 ? COL.hud : COL.gold, 'c', null, true);
+    const cbRatio = Math.max(0, skateComboTimer / 100);
+    rect(cx - 55, cy + 8, 110 * cbRatio, 5, skateCombo >= 5 ? COL.hud : COL.gold);
+  }
+
+  if(skatePhase === 'intro'){
+    ctx.save();
+    rrect(WNAT/2 - 240, 140, 480, 110, 12);
+    ctx.fillStyle = 'rgba(10,12,16,0.94)'; ctx.fill();
+    ctx.strokeStyle = COL.hud; ctx.lineWidth = 3; ctx.stroke();
+    text('BONUS STAGE: SKATE ESCAPE!', WNAT/2, 155, 3.8, COL.hud, 'c', null, true);
+    text('RIDE FAST - OLLIE HIGH - COLLECT ALL CHEESE!', WNAT/2, 195, 2.2, '#FFFFFF', 'c');
+    text('PRESS A / B TO JUMP - RIGHT TO BOOST - LEFT TO BRAKE', WNAT/2, 222, 1.8, COL.gold, 'c');
+    ctx.restore();
+  }
+
+  if(skatePhase === 'finish'){
+    ctx.save();
+    rrect(WNAT/2 - 250, 110, 500, 170, 14);
+    ctx.fillStyle = 'rgba(10,12,16,0.95)'; ctx.fill();
+    ctx.strokeStyle = COL.gold; ctx.lineWidth = 3.5; ctx.stroke();
+    text('BONUS STAGE CLEARED!', WNAT/2, 128, 4.2, COL.gold, 'c', null, true);
+    text('CITY SKATE CRUISE COMPLETE!', WNAT/2, 172, 2.6, '#00E5FF', 'c');
+    text('TOTAL BONUS POINTS: +' + skateTotalPts, WNAT/2, 206, 3.8, COL.hud, 'c', null, true);
+    text('MAX COMBO: ' + skateMaxCombo + 'X', WNAT/2, 244, 2.4, '#FFFFFF', 'c');
+    ctx.restore();
+  }
+}
+
+function renderSkate(){
+  ctx.save();
+  drawSkateCityScenery();
+
+  for(const pl of skatePlatforms){
+    drawSkatePlatform(pl);
+  }
+
+  for(const pk of skatePickups){
+    if(pk.taken) continue;
+    const sx = Math.round(pk.x - skateCamX);
+    if(sx < -40 || sx > WNAT + 40) continue;
+    const py = Math.round(pk.y + Math.sin(frame * 0.12 + pk.ph) * 3);
+    if(pk.t === 'wheel') drawCheeseWheel(sx, py);
+    else if(pk.t === 'diamond') drawDiamondCheese(sx, py);
+    else if(pk.t === 'apple') drawApple(sx, py);
+    else if(pk.t === 'trophy') drawSpr('trophy', sx, py + 12);
+    else drawCheese(sx, py);
+  }
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 1.5;
+  for(const sl of skateSpeedFx){
+    const lx = sl.x - skateCamX;
+    if(lx > -60 && lx < WNAT + 60){
+      ctx.beginPath();
+      ctx.moveTo(lx, sl.y); ctx.lineTo(lx + sl.len, sl.y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  for(const p of players){
+    drawSkateboardAndMouse(p);
+  }
+
+  for(const f of skateFx){
+    const fx = Math.round(f.x - skateCamX);
+    const fy = Math.round(f.y);
+    if(f.t === 'pts'){
+      const a = Math.max(0, 1 - f.age / 45);
+      ctx.globalAlpha = a;
+      text(f.txt, fx, fy - f.age * 0.8, f.big ? 2.8 : 2.0, f.col || '#FFFFFF', 'c', '#000', true);
+      ctx.globalAlpha = 1;
+    } else if(f.t === 'grind_spark'){
+      rect(fx, fy, 2.5, 2.5, (f.age % 2 === 0 ? '#FFFFFF' : COL.gold));
+    } else if(f.t === 'spark'){
+      disc(fx, fy, 3, 3, COL.gold);
+    } else if(f.t === 'star'){
+      disc(fx, fy, 4, 4, '#00E5FF');
+    }
+  }
+
+  for(const p of confetti){
+    ctx.fillStyle = p.c;
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), p.w, p.w);
+  }
+
+  drawSkateHUD();
+  ctx.restore();
+}
+
 function renderPlay(){
   ctx.save();
   if(shake) ctx.translate(R((Math.random()-0.5)*shake),R((Math.random()-0.5)*shake));
@@ -5854,9 +6653,11 @@ function render(){
   if(state==='victory'){ renderVictory(); return; }
   if(state==='bonus'){ renderBonus(); return; }
   if(state==='doodle'){ renderDoodle(); return; }
+  if(state==='skate'){ renderSkate(); return; }
   if(state==='paused'){
     if(prePauseState==='bonus') renderBonus();
     else if(prePauseState==='doodle') renderDoodle();
+    else if(prePauseState==='skate') renderSkate();
     else renderPlay();
     overlayBox('PAUSED',['RESUME','MAIN MENU'],pauseSel);
     return;
