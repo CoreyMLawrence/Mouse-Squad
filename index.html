@@ -18,7 +18,7 @@
   #wrap{display:flex;align-items:center;justify-content:center;flex:1 1 auto;min-height:0;}
   body.touch #wrap{padding-top:env(safe-area-inset-top, 0px);box-sizing:border-box;
        align-items:flex-start;}
-  #cv{image-rendering:pixelated;image-rendering:crisp-edges;}
+  #cv{image-rendering:pixelated;image-rendering:crisp-edges;transform:translateZ(0);backface-visibility:hidden;}
   #glcv{position:fixed;display:none;pointer-events:none;z-index:5;image-rendering:auto;}
   #ui{display:none;position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#e8d8b0;
       font-family:monospace;font-size:13px;text-align:center;opacity:.85;pointer-events:none;
@@ -3607,108 +3607,115 @@ function drawEnemy(e){
   if(!e.alive){
     if(e.dead>0){
       ctx.globalAlpha=e.dead/40;
-      if(e.t==='eraser') rect(x-17,e.y-6,34,6,COL.eraser);
-      else if(e.t==='dodgeball') disc(x,e.y-4,14,5,'#D32F2F');
-      else if(e.t==='frisbee') disc(x,e.y-4,18,4,'#00E5FF');
-      else if(e.t==='toy_frog') rect(x-12,e.y-4,24,5,'#4CAF50');
-      else if(e.t==='plane'){
-        ctx.save();
-        ctx.translate(R(x), R(e.y + (40 - e.dead) * 1.5));
-        ctx.rotate((40 - e.dead) * 0.15 * (e.vx < 0 ? -1 : 1));
-        drawPaperPlane(0, 0, e.vx);
-        ctx.restore();
+      switch(e.t){
+        case 'eraser': rect(x-17,e.y-6,34,6,COL.eraser); break;
+        case 'dodgeball': disc(x,e.y-4,14,5,'#D32F2F'); break;
+        case 'frisbee': disc(x,e.y-4,18,4,'#00E5FF'); break;
+        case 'toy_frog': rect(x-12,e.y-4,24,5,'#4CAF50'); break;
+        case 'plane':
+          ctx.save();
+          ctx.translate(R(x), R(e.y + (40 - e.dead) * 1.5));
+          ctx.rotate((40 - e.dead) * 0.15 * (e.vx < 0 ? -1 : 1));
+          drawPaperPlane(0, 0, e.vx);
+          ctx.restore();
+          break;
+        case 'bug': rect(x-14,e.y-4,28,4,'#03CF39'); break;
+        case 'byte_wasp': disc(x,e.y-4,8,8,'#03F9FC'); break;
+        case 'spark': disc(x,e.y-4,6,6,COL.gold); break;
+        default: drawPencil(x,e.y-4,Math.PI/2,40); break;
       }
-      else if(e.t==='bug') rect(x-14,e.y-4,28,4,'#03CF39');
-      else if(e.t==='byte_wasp') disc(x,e.y-4,8,8,'#03F9FC');
-      else if(e.t==='spark') disc(x,e.y-4,6,6,COL.gold);
-      else drawPencil(x,e.y-4,Math.PI/2,40);
       ctx.globalAlpha=1;
     }
     return;
   }
-  if(e.t==='dodgeball'){
-    const y=e.y;
-    const isGround=Math.abs(y-FEET)<3;
-    const rx=isGround?16:14, ry=isGround?12:15;
-    disc(x,y-ry,rx,ry,'#E53935');
-    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.ellipse(x,y-ry,rx*0.75,ry*0.6,0.3,0,Math.PI*2); ctx.stroke();
-    const f=Math.sign(e.vx)||-1;
-    disc(x+f*5,y-ry-2,3,3,'#FFFFFF'); disc(x+f*6,y-ry-2,1.5,1.5,'#111');
-    return;
-  }
-  if(e.t==='frisbee'){
-    const y=e.y;
-    ctx.save(); ctx.translate(R(x),R(y));
-    const wobble=Math.sin(frame*0.15)*0.08; ctx.rotate(wobble);
-    disc(0,0,22,7,'#00E5FF');
-    disc(0,-1,18,5,'#00B0FF');
-    disc(0,-2,10,3,'#E0F7FA');
-    ctx.restore();
-    return;
-  }
-  if(e.t==='toy_frog'){
-    const y=e.y, hop=Math.abs(Math.sin(frame*0.2))*3;
-    rrect(x-14,y-18-hop,28,16,6); ctx.fillStyle='#4CAF50'; ctx.fill();
-    rrect(x-10,y-10-hop,20,8,4); ctx.fillStyle='#8BC34A'; ctx.fill();
-    disc(x-7,y-18-hop,5,5,'#FFFFFF'); disc(x+7,y-18-hop,5,5,'#FFFFFF');
-    disc(x-7,y-18-hop,2.5,2.5,'#111'); disc(x+7,y-18-hop,2.5,2.5,'#111');
-    ctx.save(); ctx.translate(R(x),R(y-22-hop)); ctx.rotate(frame*0.3);
-    rect(-1,-5,2,10,'#B0BEC5'); disc(0,-4,3,3,'#CFD8DC'); disc(0,4,3,3,'#CFD8DC');
-    ctx.restore();
-    return;
-  }
-  if(e.t==='plane'){
-    drawPaperPlane(x,e.y,e.vx);
-    return;
-  }
-  if(e.t==='bug'){
-    const y=e.y, legSw=Math.sin(frame*0.3)*3;
-    rrect(x-14,y-18,28,16,6); ctx.fillStyle='#028A28'; ctx.fill();
-    rrect(x-12,y-16,24,12,5); ctx.fillStyle='#03CF39'; ctx.fill();
-    rect(x-1,y-16,2,12,'#02601C');
-    const f=Math.sign(e.vx)||-1;
-    disc(x+f*6,y-12,2.5,2.5,'#03F9FC');
-    disc(x+f*10,y-12,2.5,2.5,'#03F9FC');
-    for(let i=-1;i<=1;i++){
-      ctx.strokeStyle='#02601C'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(x+i*8,y-8); ctx.lineTo(x+i*8-4,y-2+legSw*(i%2===0?1:-1)); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x+i*8,y-8); ctx.lineTo(x+i*8+4,y-2-legSw*(i%2===0?1:-1)); ctx.stroke();
+  switch(e.t){
+    case 'dodgeball': {
+      const y=e.y;
+      const isGround=Math.abs(y-FEET)<3;
+      const rx=isGround?16:14, ry=isGround?12:15;
+      disc(x,y-ry,rx,ry,'#E53935');
+      ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.ellipse(x,y-ry,rx*0.75,ry*0.6,0.3,0,Math.PI*2); ctx.stroke();
+      const f=Math.sign(e.vx)||-1;
+      disc(x+f*5,y-ry-2,3,3,'#FFFFFF'); disc(x+f*6,y-ry-2,1.5,1.5,'#111');
+      return;
     }
-    return;
-  }
-  if(e.t==='byte_wasp'){
-    const y=e.y, wWing=Math.sin(frame*0.4)*6;
-    ctx.save(); ctx.translate(R(x),R(y));
-    ctx.fillStyle='#03F9FC'; ctx.beginPath();
-    ctx.moveTo(0,-12); ctx.lineTo(12,0); ctx.lineTo(0,12); ctx.lineTo(-12,0); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='#028A9E'; ctx.beginPath();
-    ctx.moveTo(0,-7); ctx.lineTo(7,0); ctx.lineTo(0,7); ctx.lineTo(-7,0); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,0.85)';
-    ctx.beginPath(); ctx.ellipse(-6,-6+wWing,5,3,0.4,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(6,-6+wWing,5,3,-0.4,0,Math.PI*2); ctx.fill();
-    ctx.restore();
-    return;
-  }
-  if(e.t==='spark'){
-    const y=e.y-10;
-    ctx.save(); ctx.translate(R(x),R(y)); ctx.rotate(frame*0.15);
-    disc(0,0,8,8,COL.gold);
-    ctx.fillStyle='#FFFFFF';
-    for(let i=0;i<4;i++){ ctx.rotate(Math.PI/2); rect(-1.5,-12,3,6,'#F9FC39'); }
-    ctx.restore();
-    return;
-  }
-  if(e.t==='eraser'){
-    const y=e.y, b=Math.abs(Math.sin(frame*0.2))*2;
-    rrect(x-17,y-22-b,34,22,5); ctx.fillStyle=COL.eraser; ctx.fill();
-    rrect(x-17,y-11-b,34,11,4); ctx.fillStyle='#4F7BD8'; ctx.fill();
-    const f=Math.sign(e.vx)||-1;
-    rect(x+f*5-3,y-18-b,4,5,'#222'); rect(x+f*11-2,y-18-b,4,5,'#222');
-    rect(x+f*3-4,y-21-b,7,2,'#222');
-  } else {
-    drawPencil(x,e.y-21,0,42);
-    rect(x-4,e.y-26,3,4,'#222'); rect(x+2,e.y-26,3,4,'#222'); rect(x-5,e.y-29,10,2,'#222');
+    case 'frisbee': {
+      const y=e.y;
+      ctx.save(); ctx.translate(R(x),R(y));
+      const wobble=Math.sin(frame*0.15)*0.08; ctx.rotate(wobble);
+      disc(0,0,22,7,'#00E5FF');
+      disc(0,-1,18,5,'#00B0FF');
+      disc(0,-2,10,3,'#E0F7FA');
+      ctx.restore();
+      return;
+    }
+    case 'toy_frog': {
+      const y=e.y, hop=Math.abs(Math.sin(frame*0.2))*3;
+      rrect(x-14,y-18-hop,28,16,6); ctx.fillStyle='#4CAF50'; ctx.fill();
+      rrect(x-10,y-10-hop,20,8,4); ctx.fillStyle='#8BC34A'; ctx.fill();
+      disc(x-7,y-18-hop,5,5,'#FFFFFF'); disc(x+7,y-18-hop,5,5,'#FFFFFF');
+      disc(x-7,y-18-hop,2.5,2.5,'#111'); disc(x+7,y-18-hop,2.5,2.5,'#111');
+      ctx.save(); ctx.translate(R(x),R(y-22-hop)); ctx.rotate(frame*0.3);
+      rect(-1,-5,2,10,'#B0BEC5'); disc(0,-4,3,3,'#CFD8DC'); disc(0,4,3,3,'#CFD8DC');
+      ctx.restore();
+      return;
+    }
+    case 'plane': {
+      drawPaperPlane(x,e.y,e.vx);
+      return;
+    }
+    case 'bug': {
+      const y=e.y, legSw=Math.sin(frame*0.3)*3;
+      rrect(x-14,y-18,28,16,6); ctx.fillStyle='#028A28'; ctx.fill();
+      rrect(x-12,y-16,24,12,5); ctx.fillStyle='#03CF39'; ctx.fill();
+      rect(x-1,y-16,2,12,'#02601C');
+      const f=Math.sign(e.vx)||-1;
+      disc(x+f*6,y-12,2.5,2.5,'#03F9FC');
+      disc(x+f*10,y-12,2.5,2.5,'#03F9FC');
+      for(let i=-1;i<=1;i++){
+        ctx.strokeStyle='#02601C'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(x+i*8,y-8); ctx.lineTo(x+i*8-4,y-2+legSw*(i%2===0?1:-1)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x+i*8,y-8); ctx.lineTo(x+i*8+4,y-2-legSw*(i%2===0?1:-1)); ctx.stroke();
+      }
+      return;
+    }
+    case 'byte_wasp': {
+      const y=e.y, wWing=Math.sin(frame*0.4)*6;
+      ctx.save(); ctx.translate(R(x),R(y));
+      ctx.fillStyle='#03F9FC'; ctx.beginPath();
+      ctx.moveTo(0,-12); ctx.lineTo(12,0); ctx.lineTo(0,12); ctx.lineTo(-12,0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#028A9E'; ctx.beginPath();
+      ctx.moveTo(0,-7); ctx.lineTo(7,0); ctx.lineTo(0,7); ctx.lineTo(-7,0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.ellipse(-6,-6+wWing,5,3,0.4,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(6,-6+wWing,5,3,-0.4,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    case 'spark': {
+      const y=e.y-10;
+      ctx.save(); ctx.translate(R(x),R(y)); ctx.rotate(frame*0.15);
+      disc(0,0,8,8,COL.gold);
+      ctx.fillStyle='#FFFFFF';
+      for(let i=0;i<4;i++){ ctx.rotate(Math.PI/2); rect(-1.5,-12,3,6,'#F9FC39'); }
+      ctx.restore();
+      return;
+    }
+    case 'eraser': {
+      const y=e.y, b=Math.abs(Math.sin(frame*0.2))*2;
+      rrect(x-17,y-22-b,34,22,5); ctx.fillStyle=COL.eraser; ctx.fill();
+      rrect(x-17,y-11-b,34,11,4); ctx.fillStyle='#4F7BD8'; ctx.fill();
+      const f=Math.sign(e.vx)||-1;
+      rect(x+f*5-3,y-18-b,4,5,'#222'); rect(x+f*11-2,y-18-b,4,5,'#222');
+      rect(x+f*3-4,y-21-b,7,2,'#222');
+      return;
+    }
+    default: {
+      drawPencil(x,e.y-21,0,42);
+      rect(x-4,e.y-26,3,4,'#222'); rect(x+2,e.y-26,3,4,'#222'); rect(x-5,e.y-29,10,2,'#222');
+      return;
+    }
   }
 }
 // ---------- mice ----------
@@ -5694,43 +5701,46 @@ function renderPlay(){
   }
   for(const c of crates){
     if(currentLevel===1 && c.zone && c.zone!==l1Zone) continue;
-    if(c.x-camX>-c.w&&c.x-camX<WNAT+100){
-      if(c.t==='desk') drawDesk(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='textbooks') drawTextbooks(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='crayons') drawCrayonBox(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='ruler') drawRuler(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='block_eraser') drawBlockEraser(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='computer') drawTeacherComputer(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='port_in') drawPortIn(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='pcb') drawPCB(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='keyspring') drawKeycap(c.x-camX,c.y,c.w,c.h,c.key,c.squash);
-      else if(c.t==='ram') drawRAM(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='chip') drawMicrochip(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='floppy') drawFloppyStack(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='firewall') drawFirewall(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='modem_exit') drawPortOut(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='cubby') drawCubby(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='trash') drawTrashCan(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='book') drawBookStack(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='locker') drawLocker(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='cone') drawCone(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='hydrant') drawHydrant(c.x-camX,c.y);
-      else if(c.t==='bench') drawBench(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='box') drawCardboardBox(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='barrier') drawBarrier(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='skateboard') drawSkateboard(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='trashbin') drawTrashBin(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='sandbox') drawSandbox(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='spring_rider') drawSpringRider(c.x-camX,c.y,c.w,c.h,c.squash,c.animal);
-      else if(c.t==='seesaw') drawSeesaw(c.x-camX,c.y,c.w,c.h,c.angle||0);
-      else if(c.t==='tire_stack') drawTireStack(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='monkey_bars') drawMonkeyBars(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='slide') drawPlaygroundSlide(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='picnic_table') drawPicnicTable(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='water_fountain') drawWaterFountain(c.x-camX,c.y,c.w,c.h);
-      else if(c.t==='mega_trampoline') drawMegaTrampoline(c.x-camX,c.y,c.w,c.h,c.squash);
-      else if(c.t==='school_gate') drawSchoolGate(c.x-camX,c.y,c.w,c.h,playgroundExitTimer);
-      else { const nb=Math.max(1,Math.round((c.h||CR)/CR)); for(let k=0;k<nb;k++) drawCrate(R(c.x-camX),c.y+k*CR); }
+    const cx=c.x-camX;
+    if(cx>-c.w&&cx<WNAT+100){
+      switch(c.t){
+        case 'desk': drawDesk(cx,c.y,c.w,c.h); break;
+        case 'textbooks': drawTextbooks(cx,c.y,c.w,c.h); break;
+        case 'crayons': drawCrayonBox(cx,c.y,c.w,c.h); break;
+        case 'ruler': drawRuler(cx,c.y,c.w,c.h); break;
+        case 'block_eraser': drawBlockEraser(cx,c.y,c.w,c.h); break;
+        case 'computer': drawTeacherComputer(cx,c.y,c.w,c.h); break;
+        case 'port_in': drawPortIn(cx,c.y,c.w,c.h); break;
+        case 'pcb': drawPCB(cx,c.y,c.w,c.h); break;
+        case 'keyspring': drawKeycap(cx,c.y,c.w,c.h,c.key,c.squash); break;
+        case 'ram': drawRAM(cx,c.y,c.w,c.h); break;
+        case 'chip': drawMicrochip(cx,c.y,c.w,c.h); break;
+        case 'floppy': drawFloppyStack(cx,c.y,c.w,c.h); break;
+        case 'firewall': drawFirewall(cx,c.y,c.w,c.h); break;
+        case 'modem_exit': drawPortOut(cx,c.y,c.w,c.h); break;
+        case 'cubby': drawCubby(cx,c.y,c.w,c.h); break;
+        case 'trash': drawTrashCan(cx,c.y,c.w,c.h); break;
+        case 'book': drawBookStack(cx,c.y,c.w,c.h); break;
+        case 'locker': drawLocker(cx,c.y,c.w,c.h); break;
+        case 'cone': drawCone(cx,c.y,c.w,c.h); break;
+        case 'hydrant': drawHydrant(cx,c.y); break;
+        case 'bench': drawBench(cx,c.y,c.w,c.h); break;
+        case 'box': drawCardboardBox(cx,c.y,c.w,c.h); break;
+        case 'barrier': drawBarrier(cx,c.y,c.w,c.h); break;
+        case 'skateboard': drawSkateboard(cx,c.y,c.w,c.h); break;
+        case 'trashbin': drawTrashBin(cx,c.y,c.w,c.h); break;
+        case 'sandbox': drawSandbox(cx,c.y,c.w,c.h); break;
+        case 'spring_rider': drawSpringRider(cx,c.y,c.w,c.h,c.squash,c.animal); break;
+        case 'seesaw': drawSeesaw(cx,c.y,c.w,c.h,c.angle||0); break;
+        case 'tire_stack': drawTireStack(cx,c.y,c.w,c.h); break;
+        case 'monkey_bars': drawMonkeyBars(cx,c.y,c.w,c.h); break;
+        case 'slide': drawPlaygroundSlide(cx,c.y,c.w,c.h); break;
+        case 'picnic_table': drawPicnicTable(cx,c.y,c.w,c.h); break;
+        case 'water_fountain': drawWaterFountain(cx,c.y,c.w,c.h); break;
+        case 'mega_trampoline': drawMegaTrampoline(cx,c.y,c.w,c.h,c.squash); break;
+        case 'school_gate': drawSchoolGate(cx,c.y,c.w,c.h,playgroundExitTimer); break;
+        default: { const nb=Math.max(1,Math.round((c.h||CR)/CR)); for(let k=0;k<nb;k++) drawCrate(R(cx),c.y+k*CR); break; }
+      }
     }
   }
   for(const p of pickups){
